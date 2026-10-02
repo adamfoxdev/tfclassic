@@ -21,6 +21,7 @@ sealed class WorldRenderer
             if (p.Alive && (p != viewer)) DrawPlayer(p, viewer);
 
         DrawSentries();
+        DrawDispensers();
         DrawFlags(time);
         DrawProjectiles();
         DrawEffects();
@@ -112,6 +113,45 @@ sealed class WorldRenderer
             // Health bar above the turret, visible to everyone.
             float frac = Math.Clamp(s.Health / s.MaxHealth, 0f, 1f);
             var barPos = s.Position + new Vector3(0, 52, 0);
+            Raylib.DrawCubeV(barPos, new Vector3(26, 2, 2), new Color(30, 30, 30, 200));
+            Raylib.DrawCubeV(barPos + new Vector3(-13 * (1 - frac), 0, 0), new Vector3(26 * frac, 3, 3),
+                frac > 0.5f ? new Color(90, 230, 90, 255) : new Color(240, 90, 70, 255));
+        }
+    }
+
+    void DrawDispensers()
+    {
+        foreach (var d in game.Dispensers)
+        {
+            var team = Palette.Team(d.Team);
+            float grow = d.Building ? 0.35f + 0.65f * (1f - d.BuildTimer / 3f) : 1f;
+            var metal = new Color(104, 108, 118, 255);
+            var screen = d.Building ? new Color(60, 60, 60, 255) : new Color(90, 230, 150, 255);
+
+            Rlgl.PushMatrix();
+            Rlgl.Translatef(d.Position.X, d.Position.Y, d.Position.Z);
+            Rlgl.Rotatef(d.Yaw * (180f / MathF.PI), 0, 1, 0);
+
+            Draw3D.Box(new Vector3(-14, 0, -12), new Vector3(14, 10 * grow, 12), Palette.Shade(team, 0.85f), true);        // base
+            Draw3D.Box(new Vector3(-13, 10 * grow, -10), new Vector3(13, 52 * grow, 10), metal, true);                      // cabinet
+            if (!d.Building)
+            {
+                Draw3D.Box(new Vector3(-13, 44, -10), new Vector3(13, 52, 10), team, true);                                 // team cap
+                float fill = Math.Clamp(d.Store / (float)Dispenser.MaxStore, 0f, 1f);
+                Draw3D.Box(new Vector3(-9, 14, 10), new Vector3(9, 40, 11), new Color(30, 32, 38, 255));                    // screen bezel (front = +Z)
+                Draw3D.Box(new Vector3(-7, 16, 11), new Vector3(-7 + 14 * fill, 38, 12), screen);                           // store level
+            }
+            Rlgl.PopMatrix();
+
+            if (d.Sabotaged)
+            {
+                float flicker = 0.5f + 0.5f * MathF.Sin(game.Time * 25f);
+                Raylib.DrawSphere(d.Position + new Vector3(0, 62 + flicker * 6, 0), 7f + flicker * 4f, new Color(70, 70, 70, 190));
+                Raylib.DrawSphere(d.Position + new Vector3(0, 46, 0), 5f, new Color(255, (int)(120 + 100 * flicker), 40, 220));
+            }
+
+            float frac = Math.Clamp(d.Health / Dispenser.MaxHealth, 0f, 1f);
+            var barPos = d.Position + new Vector3(0, 66, 0);
             Raylib.DrawCubeV(barPos, new Vector3(26, 2, 2), new Color(30, 30, 30, 200));
             Raylib.DrawCubeV(barPos + new Vector3(-13 * (1 - frac), 0, 0), new Vector3(26 * frac, 3, 3),
                 frac > 0.5f ? new Color(90, 230, 90, 255) : new Color(240, 90, 70, 255));

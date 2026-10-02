@@ -164,6 +164,14 @@ sealed class Hud
         Text(status, 24, h - 176, 16, Color.White);
         if (s != null) Text("right-click again to demolish", 24, h - 196, 13, Color.LightGray);
 
+        var d = game.DispenserOf(me);
+        string dStatus = d == null
+            ? $"Dispenser: none  (B to build, {Dispenser.BuildCost} metal)"
+            : d.Building
+                ? "Dispenser: building..."
+                : $"Dispenser: HP {MathF.Ceiling(d.Health)}/{Dispenser.MaxHealth}  store {d.Store}/{Dispenser.MaxStore}" + (d.Store <= 0 ? "  EMPTY - use the wrench" : "");
+        Text(dStatus, 24, h - 216, 16, d != null && d.Store <= 0 ? new Color(255, 140, 110, 255) : Color.White);
+
         if (me.NoticeTimer > 0)
             TextCentered(me.Notice, w / 2, h / 2 + 70, 22, new Color(255, 230, 120, 255));
     }
@@ -215,6 +223,12 @@ sealed class Hud
         {
             var m = Map(f.Position);
             Raylib.DrawRectangle((int)m.X - 3, (int)m.Y - 3, 7, 7, Palette.Team(f.Team));
+        }
+        foreach (var dsp in game.Dispensers)
+        {
+            if (dsp.Team != me.Team && !game.World.LineOfSight(me.Eye, dsp.Hull.Center)) continue;
+            var dm = Map(dsp.Position);
+            Raylib.DrawRectangle((int)dm.X - 1, (int)dm.Y - 3, 3, 7, Palette.Shade(Palette.Team(dsp.Team), 1.2f));
         }
         foreach (var s in game.Sentries)
         {
@@ -283,9 +297,9 @@ sealed class Hud
 
         TextCentered(firstJoin ? "Press 1-9 to choose a class, ENTER to join" : "Press 1-9 to choose, ENTER to confirm (applies on respawn or in your resupply room)",
             w / 2, y + 20, 20, Color.White);
-        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: build sentry  -  1/2/3 weapons  -  F/G spy disguise/feign  -  TAB scores  -  M menu  -  ESC quit",
+        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: build sentry, B dispenser  -  1/2/3 weapons  -  F/G spy  -  TAB scores  -  M menu  -  ESC quit",
             w / 2, y + 56, 16, Color.LightGray);
-        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  Enter or . alt-fire  -  +/- weapon  -  * disguise  -  / feign",
+        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  Enter or . alt-fire  -  +/- weapon  -  * disguise/dispenser  -  / feign",
             w / 2, y + 80, 16, new Color(255, 230, 140, 255));
     }
 }

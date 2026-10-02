@@ -43,6 +43,8 @@ public sealed class BotBrain
     float buildTimer;
     int buildFails;
     bool triedBuild;
+    bool dispenserTried, dispenserStarted;
+    float dispenserTimer;
     float yawOffset;
 
     public BotBrain(Game game, Player me, int seed)
@@ -56,6 +58,8 @@ public sealed class BotBrain
     void OnSpawn()
     {
         lastSpawnCount = me.SpawnCount;
+        dispenserStarted = false;
+        dispenserTried = false;
         path.Clear();
         pathGoal = -1;
         target = null;
@@ -258,11 +262,42 @@ public sealed class BotBrain
         triedBuild = false;
         buildFails = 0;
 
-        bool needsWork = (sentry.Level < 3 && me.Metal >= Sentry.UpgradeCost)
-            || ((sentry.Health < sentry.MaxHealth || sentry.Ammo < sentry.MaxAmmo) && me.Metal >= 10);
-        if (!needsWork) return;
+        // Next: a dispenser, placed to the side of the sentry (it feeds the engineer metal for upgrades).
+        var dispenser = game.DispenserOf(me);
+        if (dispenser == null && me.Metal >= Dispenser.BuildCost)
+        {
+            if (dispenserTried)
+            {
+                dispenserTried = false;
+                yawOffset += 1.3f;                     // that spot didn't work; try another direction
+            }
+            dispenserTimer -= dt;
+            if (dispenserTimer <= 0)
+            {
+                dispenserTimer = 1f;
+                if (!dispenserStarted) { dispenserStarted = true; yawOffset += MathF.PI / 2; }
+                aimYaw += yawOffset;
+                yawOffset = 0;
+                input.Yaw = aimYaw;
+                input.Pitch = 0;
+                input.BuildDispenser = true;
+                dispenserTried = true;
+                return;
+            }
+        }
+        else
+        {
+            dispenserTried = false;
+        }
 
-        var to = sentry.Hull.Center - me.Eye;
+        // Tend whichever structure needs the wrench: sentry first, then dispenser.
+        bool sentryNeeds = (sentry.Level < 3 && me.Metal >= Sentry.UpgradeCost)
+            || ((sentry.Health < sentry.MaxHealth || sentry.Ammo < sentry.MaxAmmo) && me.Metal >= 10);
+        bool dispenserNeeds = dispenser != null && !dispenser.Building
+            && (dispenser.Health < Dispenser.MaxHealth || dispenser.Store < Dispenser.MaxStore) && me.Metal >= 10;
+        if (!sentryNeeds && !dispenserNeeds) return;
+
+        var to = (sentryNeeds ? sentry.Hull.Center : dispenser!.Hull.Center) - me.Eye;
         aimYaw = MathF.Atan2(to.X, to.Z);
         aimPitch = MathF.Atan2(to.Y, MathF.Sqrt(to.X * to.X + to.Z * to.Z));
         input.Yaw = aimYaw;

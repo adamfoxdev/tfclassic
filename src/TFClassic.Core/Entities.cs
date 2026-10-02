@@ -10,6 +10,7 @@ public struct PlayerInput
     public bool Fire;       // held
     public bool DisguiseNext; // edge: start disguising as the next enemy class (Spy)
     public bool Feign;        // edge: toggle feigning death (Spy)
+    public bool BuildDispenser; // edge: build or demolish a dispenser (Engineer)
     public bool AltFire;    // held
     public float Yaw;       // radians; 0 faces +Z, increasing turns left
     public float Pitch;     // radians; positive looks up
@@ -162,6 +163,32 @@ public sealed class Sentry
     public float Cooldown => CooldownByLevel[Level - 1];
     public float Range => RangeByLevel[Level - 1];
     public float TurnRate => TurnByLevel[Level - 1];
+    public bool Building => BuildTimer > 0;
+    public bool Sabotaged => SabotageTimer > 0;
+}
+
+/// <summary>An engineer-built supply station: periodically restocks nearby teammates from a finite store.</summary>
+public sealed class Dispenser
+{
+    public const int BuildCost = 100;
+    public const int MaxStore = 400;
+    public const int MaxHealth = 150;
+    public const float Reach = 130f;
+
+    public Player Owner = null!;
+    public Team Team;
+    public Vector3 Position;   // feet
+    public float Yaw;
+    public float Health = MaxHealth;
+    public int Store = MaxStore;
+    public float BuildTimer = 3f;
+    public float UseTimer;
+    public float SabotageTimer;
+    public Player? Saboteur;
+    public bool Dead;
+
+    public static readonly Vector3 HullHalf = new(14, 28, 14);
+    public Aabb Hull => Aabb.FromCenter(Position + new Vector3(0, HullHalf.Y, 0), HullHalf);
     public bool Building => BuildTimer > 0;
     public bool Sabotaged => SabotageTimer > 0;
 }

@@ -13,6 +13,7 @@ public sealed class Game
     public List<Player> Players { get; } = new();
     public List<Projectile> Projectiles { get; } = new();
     public List<Sentry> Sentries { get; } = new();
+    public List<Dispenser> Dispensers { get; } = new();
     public List<Effect> Effects { get; } = new();
     public List<GameEvent> Events { get; } = new();
     public Flag[] Flags { get; }
@@ -125,6 +126,7 @@ public sealed class Game
         foreach (var b in bots) b.Think(dt);
         foreach (var p in Players) UpdatePlayer(p, dt);
         UpdateSentries(dt);
+        UpdateDispensers(dt);
         UpdateProjectiles(dt);
         UpdateFlags(dt);
         UpdateEffects(dt);
@@ -208,6 +210,7 @@ public sealed class Game
             if (inp.Feign) ToggleFeign(p);
             if (inp.DisguiseNext && !p.Feigning) CycleDisguise(p);
         }
+        if (p.Class.Id == PlayerClassId.Engineer && inp.BuildDispenser) ToggleDispenser(p);
         if (p.Feigning) return;
 
         if (inp.SelectSlot >= 0 && inp.SelectSlot < p.Class.Slots.Length && inp.SelectSlot != p.Slot)
@@ -315,7 +318,7 @@ public sealed class Game
     void AddTracer(Vector3 a, Vector3 b, Team team) =>
         Effects.Add(new Effect { Kind = EffectKind.Tracer, A = a, B = b, Life = 0.08f, MaxLife = 0.08f, Team = team });
 
-    /// <summary>Fires one ray. Hits the nearest enemy player or sentry in front of the first wall; returns the end point.</summary>
+    /// <summary>Fires one ray. Hits the nearest enemy player or structure in front of the first wall; returns the end point.</summary>
     Vector3 HitscanShot(Player? owner, Team team, Vector3 origin, Vector3 dir, float range, float damage,
         float headMultiplier, string weapon, float knock, float slowSeconds = 0f)
     {
@@ -325,6 +328,7 @@ public sealed class Game
 
         Player? victim = null;
         Sentry? sentry = null;
+        Dispenser? dispenser = null;
         foreach (var q in Players)
         {
             if (q == owner || !q.Alive || q.Team == team || q.Feigning) continue;
@@ -332,7 +336,7 @@ public sealed class Game
             float t;
             if (hull.Contains(origin)) t = 0;
             else if (!Collision.RayAabb(origin, delta, hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; victim = q; sentry = null; }
+            if (t < bestT) { bestT = t; victim = q; sentry = null; dispenser = null; }
         }
         foreach (var s in Sentries)
         {
@@ -340,7 +344,15 @@ public sealed class Game
             float t;
             if (s.Hull.Contains(origin)) t = 0;
             else if (!Collision.RayAabb(origin, delta, s.Hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; sentry = s; victim = null; }
+            if (t < bestT) { bestT = t; sentry = s; victim = null; dispenser = null; }
+        }
+        foreach (var d in Dispensers)
+        {
+            if (d.Dead || d.Team == team) continue;
+            float t;
+            if (d.Hull.Contains(origin)) t = 0;
+            else if (!Collision.RayAabb(origin, delta, d.Hull, out t, out _)) continue;
+            if (t < bestT) { bestT = t; dispenser = d; victim = null; sentry = null; }
         }
 
         var end = origin + delta * bestT;
@@ -355,6 +367,10 @@ public sealed class Game
         {
             DamageSentry(sentry, owner, damage, weapon);
         }
+        else if (dispenser != null)
+        {
+            DamageDispenser(dispenser, owner, damage, weapon);
+        }
         return end;
     }
 
@@ -366,6 +382,7 @@ public sealed class Game
 
         Player? best = null;
         Sentry? bestSentry = null;
+        Dispenser? bestDispenser = null;
         foreach (var q in Players)
         {
             if (q == p || !q.Alive || q.Feigning) continue;
@@ -374,7 +391,7 @@ public sealed class Game
             float t;
             if (hull.Contains(eye)) t = 0;
             else if (!Collision.RayAabb(eye, delta, hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; best = q; bestSentry = null; }
+            if (t < bestT) { bestT = t; best = q; bestSentry = null; bestDispenser = null; }
         }
         foreach (var s in Sentries)
         {
@@ -383,7 +400,16 @@ public sealed class Game
             float t;
             if (hull.Contains(eye)) t = 0;
             else if (!Collision.RayAabb(eye, delta, hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; bestSentry = s; best = null; }
+            if (t < bestT) { bestT = t; bestSentry = s; best = null; bestDispenser = null; }
+        }
+        foreach (var d in Dispensers)
+        {
+            if (d.Dead || (d.Team == p.Team && w.Mode != FireMode.Wrench)) continue;
+            var hull = d.Hull.Expand(new Vector3(6));
+            float t;
+            if (hull.Contains(eye)) t = 0;
+            else if (!Collision.RayAabb(eye, delta, hull, out t, out _)) continue;
+            if (t < bestT) { bestT = t; bestDispenser = d; best = null; bestSentry = null; }
         }
 
         if (bestSentry != null)
@@ -391,6 +417,13 @@ public sealed class Game
             if (bestSentry.Team == p.Team) WrenchSentry(p, bestSentry);
             else if (w.Mode == FireMode.Backstab) SabotageSentry(p, bestSentry);
             else DamageSentry(bestSentry, p, w.Damage, w.Name);
+            return;
+        }
+        if (bestDispenser != null)
+        {
+            if (bestDispenser.Team == p.Team) WrenchDispenser(p, bestDispenser);
+            else if (w.Mode == FireMode.Backstab) SabotageDispenser(p, bestDispenser);
+            else DamageDispenser(bestDispenser, p, w.Damage, w.Name);
             return;
         }
         if (best == null) return;
@@ -432,6 +465,15 @@ public sealed class Game
             if (sd > w.Range || sd < 1f || Vector3.Dot(sv / sd, fwd) < 0.88f) continue;
             if (!World.LineOfSight(eye, s.Hull.Center)) continue;
             DamageSentry(s, p, w.Damage * 0.5f, w.Name);
+        }
+        foreach (var d in Dispensers.ToArray())
+        {
+            if (d.Dead || d.Team == p.Team) continue;
+            var dv = d.Hull.Center - eye;
+            float dd = dv.Length();
+            if (dd > w.Range || dd < 1f || Vector3.Dot(dv / dd, fwd) < 0.88f) continue;
+            if (!World.LineOfSight(eye, d.Hull.Center)) continue;
+            DamageDispenser(d, p, w.Damage * 0.5f, w.Name);
         }
         foreach (var q in Players)
         {
@@ -520,6 +562,30 @@ public sealed class Game
         return best;
     }
 
+    /// <summary>Whether the segment strikes an enemy sentry or dispenser before maxT (t is the fraction along it).</summary>
+    bool SegmentHitsStructure(Projectile pr, Vector3 from, Vector3 delta, float maxT, out float hitT)
+    {
+        hitT = maxT;
+        bool hit = false;
+        foreach (var s in Sentries)
+        {
+            if (s.Dead || s.Team == pr.Team) continue;
+            float t;
+            if (s.Hull.Contains(from)) t = 0;
+            else if (!Collision.RayAabb(from, delta, s.Hull, out t, out _)) continue;
+            if (t < hitT) { hitT = t; hit = true; }
+        }
+        foreach (var d in Dispensers)
+        {
+            if (d.Dead || d.Team == pr.Team) continue;
+            float t;
+            if (d.Hull.Contains(from)) t = 0;
+            else if (!Collision.RayAabb(from, delta, d.Hull, out t, out _)) continue;
+            if (t < hitT) { hitT = t; hit = true; }
+        }
+        return hit;
+    }
+
     void UpdateRocket(Projectile pr, float dt)
     {
         var delta = pr.Velocity * dt;
@@ -528,9 +594,11 @@ public sealed class Game
         if (worldHit) tWorld = tw;
 
         var victim = SegmentHitsEnemy(pr, pr.Position, delta, tWorld, out float tPlayer);
-        if (worldHit || victim != null)
+        float tNear = victim != null ? tPlayer : tWorld;
+        bool structureHit = SegmentHitsStructure(pr, pr.Position, delta, tNear, out float tStructure);
+        if (worldHit || victim != null || structureHit)
         {
-            float t = victim != null ? tPlayer : tWorld;
+            float t = structureHit ? tStructure : tNear;
             var dir = Vector3.Normalize(pr.Velocity);
             pr.Dead = true;
             Explode(pr.Position + delta * t - dir * 4f, pr.Owner, pr.Damage, pr.Splash, pr.Label);
@@ -561,10 +629,12 @@ public sealed class Game
         if (pr.Kind == ProjectileKind.Grenade)
         {
             var victim = SegmentHitsEnemy(pr, pr.Position, delta, tWorld, out float tp);
-            if (victim != null)
+            float tNear = victim != null ? tp : tWorld;
+            bool structureHit = SegmentHitsStructure(pr, pr.Position, delta, tNear, out float tStructure);
+            if (victim != null || structureHit)
             {
                 pr.Dead = true;
-                Explode(pr.Position + delta * tp, pr.Owner, pr.Damage, pr.Splash, "Grenade");
+                Explode(pr.Position + delta * (structureHit ? tStructure : tp), pr.Owner, pr.Damage, pr.Splash, "Grenade");
                 return;
             }
         }
@@ -615,6 +685,14 @@ public sealed class Game
             float d = s.Hull.DistanceTo(pos);
             if (d >= radius || !World.LineOfSight(pos, s.Hull.Center)) continue;
             DamageSentry(s, owner, damage * (1f - d / radius), weapon);
+        }
+
+        foreach (var ds in Dispensers.ToArray())
+        {
+            if (ds.Dead || ds.Team == owner.Team) continue;
+            float d = ds.Hull.DistanceTo(pos);
+            if (d >= radius || !World.LineOfSight(pos, ds.Hull.Center)) continue;
+            DamageDispenser(ds, owner, damage * (1f - d / radius), weapon);
         }
     }
 
@@ -696,28 +774,158 @@ public sealed class Game
             return;
         }
         if (p.Metal < Sentry.BuildCost) { Notice(p, $"Need {Sentry.BuildCost} metal to build a sentry"); return; }
-        if (!p.OnGround) { Notice(p, "Stand on the ground to build"); return; }
+        if (!FindBuildSpot(p, Sentry.HullHalf, out var spot)) return;
+
+        p.Metal -= Sentry.BuildCost;
+        Sentries.Add(new Sentry { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw });
+        Notice(p, "Building sentry...");
+    }
+
+    /// <summary>Finds floor about 56 units in front of the engineer with room for a structure of the given size.</summary>
+    bool FindBuildSpot(Player p, Vector3 half, out Vector3 spot)
+    {
+        spot = default;
+        if (!p.OnGround) { Notice(p, "Stand on the ground to build"); return false; }
 
         var flat = new Vector3(MathF.Sin(p.Yaw), 0, MathF.Cos(p.Yaw));
-        var spot = p.Position + flat * 56f;
+        spot = p.Position + flat * 56f;
         var from = spot + new Vector3(0, 30, 0);
         if (World.Raycast(p.Position + new Vector3(0, 30, 0), from, out _, out _) ||
             !World.Raycast(from, from + new Vector3(0, -60, 0), out float t, out var n) || n.Y < 0.7f)
         {
             Notice(p, "No room to build here");
-            return;
+            return false;
         }
         spot.Y = from.Y - 60 * t;
-        if (World.Overlaps(spot + new Vector3(0, Sentry.HullHalf.Y + 0.5f, 0), Sentry.HullHalf)
-            || World.InZone(ZoneKind.Water, spot + new Vector3(0, 10, 0)))
+
+        var center = spot + new Vector3(0, half.Y + 0.5f, 0);
+        var box = Aabb.FromCenter(center, half);
+        if (World.Overlaps(center, half)
+            || World.InZone(ZoneKind.Water, spot + new Vector3(0, 10, 0))
+            || Sentries.Any(s => !s.Dead && s.Hull.Intersects(box))
+            || Dispensers.Any(d => !d.Dead && d.Hull.Intersects(box)))
         {
             Notice(p, "No room to build here");
+            return false;
+        }
+        return true;
+    }
+
+    public Dispenser? DispenserOf(Player p) => Dispensers.FirstOrDefault(d => d.Owner == p && !d.Dead);
+
+    /// <summary>Engineer's build-dispenser key: build one in front of you, or demolish the one you have.</summary>
+    void ToggleDispenser(Player p)
+    {
+        var existing = DispenserOf(p);
+        if (existing != null)
+        {
+            existing.Dead = true;
+            p.Metal = Math.Min(p.Class.MaxMetal, p.Metal + 40);
+            Effects.Add(new Effect { Kind = EffectKind.Explosion, A = existing.Hull.Center, Life = 0.25f, MaxLife = 0.25f, Radius = 40f });
+            Notice(p, "Dispenser demolished (+40 metal)");
             return;
         }
+        if (p.Metal < Dispenser.BuildCost) { Notice(p, $"Need {Dispenser.BuildCost} metal to build a dispenser"); return; }
+        if (!FindBuildSpot(p, Dispenser.HullHalf, out var spot)) return;
 
-        p.Metal -= Sentry.BuildCost;
-        Sentries.Add(new Sentry { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw });
-        Notice(p, "Building sentry...");
+        p.Metal -= Dispenser.BuildCost;
+        Dispensers.Add(new Dispenser { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw + MathF.PI });   // screen faces the engineer
+        Notice(p, "Building dispenser...");
+    }
+
+    void WrenchDispenser(Player p, Dispenser d)
+    {
+        if (d.Sabotaged)
+        {
+            d.SabotageTimer = 0;
+            Notice(p, "Sabotage removed");
+            return;
+        }
+        if (d.Building) return;
+        if ((d.Health < Dispenser.MaxHealth || d.Store < Dispenser.MaxStore) && p.Metal >= 10)
+        {
+            d.Health = MathF.Min(Dispenser.MaxHealth, d.Health + 40);
+            d.Store = Math.Min(Dispenser.MaxStore, d.Store + 100);
+            p.Metal -= 10;
+            Effects.Add(new Effect { Kind = EffectKind.Heal, A = d.Hull.Center, Life = 0.4f, MaxLife = 0.4f, Team = d.Team });
+        }
+        else if (d.Health >= Dispenser.MaxHealth && d.Store >= Dispenser.MaxStore)
+        {
+            Notice(p, "Dispenser is full");
+        }
+    }
+
+    void SabotageDispenser(Player spy, Dispenser d)
+    {
+        if (d.Building || d.Sabotaged) return;
+        d.SabotageTimer = 4f;
+        d.Saboteur = spy;
+        Notice(spy, "Dispenser sabotaged!");
+        Notice(d.Owner, "Your dispenser is being sabotaged! (hit it with the wrench)");
+    }
+
+    void DamageDispenser(Dispenser d, Player? attacker, float amount, string weapon)
+    {
+        if (d.Dead) return;
+        if (attacker != null && attacker.Team == d.Team) return;
+        d.Health -= amount;
+        if (d.Health > 0) return;
+
+        d.Dead = true;
+        Effects.Add(new Effect { Kind = EffectKind.Explosion, A = d.Hull.Center, Life = 0.4f, MaxLife = 0.4f, Radius = 80f });
+        if (attacker != null)
+        {
+            attacker.Frags++;
+            Events.Add(new GameEvent(Time, $"{attacker.Name} [{weapon}] destroyed {d.Owner.Name}'s dispenser", attacker.Team));
+        }
+    }
+
+    void UpdateDispensers(float dt)
+    {
+        foreach (var d in Dispensers)
+        {
+            if (d.Dead) continue;
+            if (d.Building) { d.BuildTimer -= dt; continue; }
+            if (d.SabotageTimer > 0)
+            {
+                d.SabotageTimer -= dt;
+                if (d.SabotageTimer <= 0) DamageDispenser(d, d.Saboteur, 99999f, "Sabotage");
+                continue;
+            }
+
+            d.UseTimer -= dt;
+            if (d.UseTimer > 0 || d.Store <= 0) continue;
+            d.UseTimer = 1f;
+
+            var center = d.Hull.Center;
+            foreach (var q in Players)
+            {
+                if (d.Store <= 0) break;
+                if (!q.Alive || q.Team != d.Team) continue;
+                if (q.Hull.DistanceTo(center) > Dispenser.Reach || !World.LineOfSight(center, q.Center)) continue;
+                if (Restock(q)) d.Store = Math.Max(0, d.Store - 15);
+            }
+        }
+        Dispensers.RemoveAll(d => d.Dead);
+    }
+
+    static readonly int[] DispenserAmmo = { 0, 20, 30, 10, 30 };
+
+    /// <summary>Tops a player up a little (ammo, armor, metal). Returns whether anything was given.</summary>
+    bool Restock(Player q)
+    {
+        bool gave = false;
+        for (int i = 1; i < q.Ammo.Length; i++)
+        {
+            int room = q.Class.MaxAmmo[i] - q.Ammo[i];
+            if (room <= 0) continue;
+            q.Ammo[i] += Math.Min(room, DispenserAmmo[i]);
+            gave = true;
+        }
+        if (q.Armor < q.Class.MaxArmor) { q.Armor = MathF.Min(q.Class.MaxArmor, q.Armor + 20); gave = true; }
+        if (q.Metal < q.Class.MaxMetal) { q.Metal = Math.Min(q.Class.MaxMetal, q.Metal + 20); gave = true; }
+        if (gave) Effects.Add(new Effect { Kind = EffectKind.Heal, A = q.Center + new Vector3(0, 10, 0), Life = 0.3f, MaxLife = 0.3f, Team = q.Team });
+        return gave;
     }
 
     void WrenchSentry(Player p, Sentry s)
@@ -982,6 +1190,7 @@ public sealed class Game
         }
         Projectiles.Clear();
         Sentries.Clear();
+        Dispensers.Clear();
         foreach (var p in Players) Respawn(p);
     }
 

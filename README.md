@@ -27,6 +27,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | `1` `2` `3` / wheel | switch weapon |
 | `Tab` | scoreboard |
 | `F` / `G` | Spy: cycle disguise as an enemy class / feign death |
+| `B` | Engineer: build a dispenser (again to demolish it) |
 | `M` | class menu (applies on respawn, or instantly in your own resupply room) |
 | `Esc` | quit |
 
@@ -39,7 +40,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Numpad `0` | fire (hold; sniper charges while held) |
 | Numpad `Enter` or `.` | alt-fire (detonate pipebombs, build/demolish sentry) |
 | Numpad `+` / `-` | next / previous weapon |
-| Numpad `*` / `/` | Spy: disguise / feign death |
+| Numpad `*` / `/` | Spy: disguise / feign death. Engineer: `*` builds a dispenser |
 | Numpad `1`-`8` | choose a class in the menu |
 
 ### Rules
@@ -52,7 +53,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 ### Classes
 
 Scout, Soldier (rocket jumping works), Demoman (grenade launcher + sticky pipebombs), HWGuy, Sniper (charged
-shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning), Engineer (sentry gun), Spy (disguise, backstab, sabotage).
+shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning), Engineer (sentry gun, dispenser), Spy (disguise, backstab, sabotage).
 
 **Engineer / sentry gun:** right-click builds a sentry about 56 units in front of you for 130 metal (it takes 3 s to
 come online). Hit your own sentry with the wrench to upgrade it (100 metal per level, up to level 3 which adds
@@ -68,7 +69,7 @@ targets for 3 s. `G` feigns death for up to 10 s (fake kill-feed message and cor
 sentries and bots ignore you; not allowed while carrying the flag). Bot spies disguise on spawn, stab anything that
 comes close and sabotage sentries they walk past.
 
-**Not yet implemented:** dispenser and teleporters, concussion/hand grenades, detpacks, infection.
+**Not yet implemented:** teleporters, concussion/hand grenades, detpacks, infection. (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
 
 ## The map
 

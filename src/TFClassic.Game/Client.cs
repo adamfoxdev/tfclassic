@@ -24,7 +24,7 @@ sealed class Client
 
     float yaw, pitch;
     int pendingSlot = -1;
-    bool pendingDisguise, pendingFeign;
+    bool pendingDisguise, pendingFeign, pendingDispenser;
     bool swallowKpEnter;   // the key that closed the menu must not also count as alt-fire
     double accumulator;
     float time;
@@ -59,7 +59,7 @@ sealed class Client
                 else PushInput();
                 game.Tick(Dt);
                 pendingSlot = -1;
-                pendingDisguise = pendingFeign = false;
+                pendingDisguise = pendingFeign = pendingDispenser = false;
                 accumulator -= Dt;
             }
 
@@ -163,6 +163,8 @@ sealed class Client
 
         // Spy: F cycles the enemy-class disguise, G feigns death (numpad * and / as alternatives).
         if (Raylib.IsKeyPressed(KeyboardKey.F) || Raylib.IsKeyPressed(KeyboardKey.KpMultiply)) pendingDisguise = true;
+        // Engineer: B builds / demolishes a dispenser (numpad * as an alternative; Spies use it for disguise).
+        if (Raylib.IsKeyPressed(KeyboardKey.B) || Raylib.IsKeyPressed(KeyboardKey.KpMultiply)) pendingDispenser = true;
         if (Raylib.IsKeyPressed(KeyboardKey.G) || Raylib.IsKeyPressed(KeyboardKey.KpDivide)) pendingFeign = true;
 
         if (Raylib.IsKeyPressed(KeyboardKey.KpAdd)) pendingSlot = (me.Slot + 1) % me.Class.Slots.Length;
@@ -195,7 +197,7 @@ sealed class Client
         var input = new PlayerInput
         {
             SelectSlot = pendingSlot, Yaw = yaw, Pitch = pitch,
-            DisguiseNext = pendingDisguise, Feign = pendingFeign,
+            DisguiseNext = pendingDisguise, Feign = pendingFeign, BuildDispenser = pendingDispenser,
         };
         if (!menuOpen)
         {
