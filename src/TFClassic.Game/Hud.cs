@@ -290,15 +290,22 @@ sealed class Hud
     void DrawRadar(Player me)
     {
         const int rw = 90, rh = 180, rx = 12, ry = 12;
-        const float worldW = 2000, worldH = 4000;
+        float worldW = game.Map.BoundsMax.X - game.Map.BoundsMin.X, worldH = game.Map.BoundsMax.Y - game.Map.BoundsMin.Y;
+        float cx = (game.Map.BoundsMax.X + game.Map.BoundsMin.X) / 2, cz = (game.Map.BoundsMax.Y + game.Map.BoundsMin.Y) / 2;
         Raylib.DrawRectangle(rx, ry, rw, rh, new Color(0, 0, 0, 120));
         Raylib.DrawRectangleLines(rx, ry, rw, rh, new Color(255, 255, 255, 140));
 
         Vector2 Map(Vector3 p) => new(
-            rx + (p.X + worldW / 2) / worldW * rw,
-            ry + (1 - (p.Z + worldH / 2) / worldH) * rh);
+            rx + (p.X - cx + worldW / 2) / worldW * rw,
+            ry + (1 - (p.Z - cz + worldH / 2) / worldH) * rh);
 
-        Raylib.DrawRectangle(rx, ry + rh / 2 - 5, rw, 10, new Color(60, 110, 200, 150)); // river
+        foreach (var z in game.World.Zones)
+        {
+            if (z.Kind != ZoneKind.Water) continue;
+            var a = Map(new Vector3(z.Box.Min.X, 0, z.Box.Max.Z));
+            var b = Map(new Vector3(z.Box.Max.X, 0, z.Box.Min.Z));
+            Raylib.DrawRectangle((int)a.X, (int)a.Y, (int)(b.X - a.X), (int)(b.Y - a.Y), new Color(60, 110, 200, 150));
+        }
 
         foreach (var f in game.Flags)
         {
@@ -370,7 +377,7 @@ sealed class Hud
     {
         Raylib.DrawRectangle(0, 0, w, h, new Color(0, 0, 0, 200));
         TextCentered("TEAM FORTRESS CLASSIC", w / 2, 40, 54, Color.White);
-        TextCentered("2fort-lite  -  capture the flag", w / 2, 100, 22, Color.LightGray);
+        TextCentered($"{game.Map.Name}  -  capture the flag", w / 2, 100, 22, Color.LightGray);
 
         var tc = Palette.Team(team);
         TextCentered($"Team: {team}   (press T to switch)", w / 2, 150, 26, tc);

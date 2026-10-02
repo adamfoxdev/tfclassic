@@ -7,13 +7,29 @@ namespace TFClassic.Desktop;
 
 static class Palette
 {
-    public static readonly Color Sky = new(135, 190, 235, 255);
+    /// <summary>Set once at startup from the loaded map.</summary>
+    public static MapTheme Theme { get; set; } = MapTheme.Grassland;
+
+    public static Color Sky => Theme == MapTheme.Desert ? new Color(222, 200, 160, 255) : new Color(135, 190, 235, 255);
     public static readonly Color Red = new(220, 60, 50, 255);
     public static readonly Color Blue = new(60, 105, 235, 255);
 
     public static Color Team(Team t) => t == Core.Team.Red ? Red : Blue;
 
-    public static Color Of(Material m) => m switch
+    public static Color Of(Material m) => Theme == MapTheme.Desert ? Desert(m) : Grass(m);
+
+    static Color Desert(Material m) => m switch
+    {
+        Material.Ground => new Color(206, 176, 120, 255),
+        Material.Wall => new Color(184, 150, 108, 255),
+        Material.Floor => new Color(150, 130, 104, 255),
+        Material.Crate => new Color(112, 120, 82, 255),
+        Material.Stairs => new Color(160, 138, 112, 255),
+        Material.Roof => new Color(132, 108, 88, 255),
+        _ => Grass(m),
+    };
+
+    static Color Grass(Material m) => m switch
     {
         Material.Ground => new Color(92, 118, 74, 255),
         Material.Wall => new Color(158, 148, 132, 255),

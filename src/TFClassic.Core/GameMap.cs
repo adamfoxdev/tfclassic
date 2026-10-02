@@ -8,9 +8,27 @@ public readonly record struct SpawnPoint(Vector3 Position, float Yaw);
 /// A playable map: geometry, flag stands, spawn points and a bot waypoint graph.
 /// Red fortress sits at +Z, Blue at -Z; a river with one bridge runs through the middle.
 /// </summary>
-public sealed class GameMap
+/// <summary>Visual flavour of a map; the client picks palettes and sky colours from it.</summary>
+public enum MapTheme { Grassland, Desert }
+
+public sealed partial class GameMap
 {
     public string Name { get; init; } = "";
+    public MapTheme Theme { get; init; } = MapTheme.Grassland;
+
+    /// <summary>Playable extent on the ground plane (X, Z), used for the radar.</summary>
+    public Vector2 BoundsMin { get; init; } = new(-1000, -2000);
+    public Vector2 BoundsMax { get; init; } = new(1000, 2000);
+
+    /// <summary>Bot waypoint names (without the R_/B_ prefix) where defenders like to stand watch.</summary>
+    public string[] DefendNodes { get; init; } = { "flagdoor", "hall", "door" };
+
+    /// <summary>Where an engineer bot puts the teleporter exit (the entrance goes outside the spawn building).</summary>
+    public string TeleporterExitNode { get; init; } = "bridge";
+    public string TeleporterEntranceNode { get; init; } = "spawnexit";
+
+    /// <summary>A forward node bots retreat toward (e.g. after setting a detpack).</summary>
+    public string FieldNode { get; init; } = "field";
     public World World { get; } = new();
     public NavGraph Nav { get; } = new();
     public Vector3[] FlagHome { get; } = new Vector3[2];
@@ -45,6 +63,21 @@ public sealed class GameMap
     {
         Nav.Link("R_" + a, "R_" + b);
         Nav.Link("B_" + a, "B_" + b);
+    }
+
+    public static readonly string[] Names = { "2fort_lite", "bunker_yard" };
+
+    /// <summary>Builds a map by name (case-insensitive, unambiguous prefixes like "bunker" or "2fort" work).</summary>
+    public static GameMap Create(string name)
+    {
+        var matches = Names.Where(n => n.StartsWith(name, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (matches.Count != 1)
+            throw new ArgumentException($"Unknown or ambiguous map '{name}'. Available: {string.Join(", ", Names)}");
+        return matches[0] switch
+        {
+            "bunker_yard" => BunkerYard(),
+            _ => TwoFortLite(),
+        };
     }
 
     public static GameMap TwoFortLite()

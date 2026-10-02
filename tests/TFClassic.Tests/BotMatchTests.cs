@@ -9,9 +9,9 @@ namespace TFClassic.Tests;
 public class BotMatchTests(ITestOutputHelper output)
 {
     /// <summary>Bots with classes drawn from a fixed pool (Engineer/Spy optional, since sentries and disguises change the balance a lot).</summary>
-    static Game BotGame(int seed, int perTeam, bool engineers = false)
+    static Game BotGame(int seed, int perTeam, bool engineers = false, string map = "2fort_lite")
     {
-        var g = NewGame(seed);
+        var g = NewGame(seed, map);
         var rng = new Random(seed * 31);
         int pool = engineers ? Classes.All.Length : (int)PlayerClassId.Engineer;   // Engineer and Spy come last
         for (int i = 0; i < perTeam; i++)
@@ -22,14 +22,16 @@ public class BotMatchTests(ITestOutputHelper output)
         return g;
     }
 
-    [Fact]
-    public void BotsPlayFullMatchesWithoutBreakingAndCaptureFlags()
+    public static IEnumerable<object[]> AllMaps => GameMap.Names.Select(n => new object[] { n });
+
+    [Theory, MemberData(nameof(AllMaps))]
+    public void BotsPlayFullMatchesWithoutBreakingAndCaptureFlags(string map)
     {
         int captures = 0, pickups = 0, deaths = 0;
         float minY = 0;
         foreach (int seed in new[] { 1, 5, 8 })
         {
-            var g = BotGame(seed, 6);
+            var g = BotGame(seed, 6, map: map);
             var carriers = new Player?[2];
             for (int i = 0; i < 60 * 600; i++)           // ten simulated minutes per match
             {
@@ -59,10 +61,10 @@ public class BotMatchTests(ITestOutputHelper output)
         Assert.True(minY > -150f, "nobody should fall out of the map");
     }
 
-    [Fact]
-    public void BotsDoNotGetStuckOnTheMap()
+    [Theory, MemberData(nameof(AllMaps))]
+    public void BotsDoNotGetStuckOnTheMap(string map)
     {
-        var g = BotGame(7, 6);
+        var g = BotGame(7, 6, map: map);
         Run(g, 600);
         output.WriteLine($"stuck resets in 10 minutes with 12 bots: {g.BotStuckResets}");
         Assert.True(g.BotStuckResets <= 2, $"bots got stuck {g.BotStuckResets} times");

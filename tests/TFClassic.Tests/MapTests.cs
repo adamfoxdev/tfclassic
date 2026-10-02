@@ -7,12 +7,14 @@ namespace TFClassic.Tests;
 
 public class MapTests(ITestOutputHelper output)
 {
+    public static IEnumerable<object[]> AllMaps => GameMap.Names.Select(n => new object[] { n });
+
     static readonly Vector3 Half = Player.HullHalf;
 
-    [Fact]
-    public void SpawnsAndFlagsAreInOpenSpace()
+    [Theory, MemberData(nameof(AllMaps))]
+    public void SpawnsAndFlagsAreInOpenSpace(string MapName)
     {
-        var map = GameMap.TwoFortLite();
+        var map = GameMap.Create(MapName);
         foreach (var team in new[] { Team.Red, Team.Blue })
             foreach (var s in map.Spawns[(int)team])
                 Assert.False(map.World.Overlaps(s.Position + new Vector3(0, 36.5f, 0), Half), $"{team} spawn {s.Position} is inside geometry");
@@ -21,19 +23,19 @@ public class MapTests(ITestOutputHelper output)
             Assert.False(map.World.Overlaps(map.FlagHome[i] + new Vector3(0, 44f, 0), Half));
     }
 
-    [Fact]
-    public void MapIsMirrored()
+    [Theory, MemberData(nameof(AllMaps))]
+    public void MapIsMirrored(string MapName)
     {
-        var map = GameMap.TwoFortLite();
+        var map = GameMap.Create(MapName);
         Assert.Equal(map.FlagHome[0].X, map.FlagHome[1].X);
         Assert.Equal(map.FlagHome[0].Z, -map.FlagHome[1].Z);
         Assert.Equal(map.Spawns[0].Count, map.Spawns[1].Count);
     }
 
-    [Fact]
-    public void EveryWaypointLinkIsWalkable()
+    [Theory, MemberData(nameof(AllMaps))]
+    public void EveryWaypointLinkIsWalkable(string MapName)
     {
-        var map = GameMap.TwoFortLite();
+        var map = GameMap.Create(MapName);
         var world = map.World;
         var problems = new List<string>();
 
@@ -76,10 +78,10 @@ public class MapTests(ITestOutputHelper output)
         Assert.Empty(problems);
     }
 
-    [Fact]
-    public void PathExistsFromEverySpawnToBothFlags()
+    [Theory, MemberData(nameof(AllMaps))]
+    public void PathExistsFromEverySpawnToBothFlags(string MapName)
     {
-        var map = GameMap.TwoFortLite();
+        var map = GameMap.Create(MapName);
         foreach (var team in new[] { Team.Red, Team.Blue })
         {
             int start = map.Nav.Nearest(map.Spawns[(int)team][0].Position, map.World);

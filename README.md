@@ -1,6 +1,7 @@
 # TF Classic (C#)
 
-A Team Fortress Classic–style capture-the-flag game in C# / .NET 8, with **one map** (`2fort_lite`),
+A Team Fortress Classic–style capture-the-flag game in C# / .NET 8, with **two maps** (`2fort_lite`, a grassland fortress-and-river map, and `bunker_yard`, a desert
+map with a central depot you can cross indoors or over the roof),
 all nine classes and bots to play against. Single player; no networking.
 
 ## Run it
@@ -12,7 +13,7 @@ dotnet run --project src/TFClassic.Game
 dotnet run --project src/TFClassic.Game -- --bots 8 --team red --class sniper
 ```
 
-Options: `--mute`, `--volume 0..1`, `--bots N` (players per team, default 6), `--team red|blue`, `--class <name>`, `--seed N`,
+Options: `--map <name>` (`--list-maps` to list; prefixes like `bunker` work), `--mute`, `--volume 0..1`, `--bots N` (players per team, default 6), `--team red|blue`, `--class <name>`, `--seed N`,
 `--width W --height H`.
 
 ### Controls
@@ -185,7 +186,7 @@ src/TFClassic.Core   headless simulation – no rendering, fully unit-tested
   Aabb / World         box-soup collision, sweeps, raycasts, trigger zones
   Movement             ground friction, air accel, stair stepping, wall sliding
   Game                 players, weapons, projectiles, explosions, flags, scoring, respawn
-  GameMap              the 2fort_lite geometry, spawns and bot waypoints (Red half is mirrored to Blue)
+  GameMap              map geometry, spawns and bot waypoints for `2fort_lite` and `bunker_yard` (Red half is mirrored to Blue; `GameMap.Create(name)`)
   Navigation/BotBrain  waypoint A*, target selection, aiming, role assignment (attackers/defenders)
 src/TFClassic.Game   Raylib-cs client (namespace TFClassic.Desktop): renderer, weapon models, HUD, menu, sound, input, fixed 60 Hz timestep
 tests/TFClassic.Tests xunit: physics, combat, CTF rules, map validity, full bot-vs-bot matches

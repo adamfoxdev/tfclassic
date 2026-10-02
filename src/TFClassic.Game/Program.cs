@@ -57,6 +57,7 @@ static class Program
         bool menu = false, sentry = false, tele = false, infect = false, fx = false;
         float warmup = 25f;
         var team = Team.Blue;
+        string mapName = "2fort_lite";
         var cls = PlayerClassId.Soldier;
 
         for (int i = 0; i < args.Length; i++)
@@ -82,12 +83,14 @@ static class Program
                 case "--tele": tele = true; break;
                 case "--infect": infect = true; break;
                 case "--fx": fx = true; break;
+                case "--map": mapName = args[++i]; break;
+                case "--list-maps": Console.WriteLine(string.Join("\n", GameMap.Names)); return 0;
                 case "--warmup": warmup = float.Parse(args[++i]); break;
                 case "--team": team = Enum.Parse<Team>(args[++i], true); break;
                 case "--class": cls = Enum.Parse<PlayerClassId>(args[++i], true); break;
                 case "--help":
                     Console.WriteLine("TFClassic [--bots N per team] [--seed N] [--team red|blue] [--class <name>] [--width W --height H]\n" +
-                                      "          [--mute] [--volume 0..1] [--dump-sounds dir] [--audio-test] [--slot 1..3] [--fire] [--grenade] [--lineup]\n          [--screenshot out.png [--warmup seconds] [--at x,y,z,yawDeg,pitchDeg]]");
+                                      "          [--map name] [--list-maps]\n          [--mute] [--volume 0..1] [--dump-sounds dir] [--audio-test] [--slot 1..3] [--fire] [--grenade] [--lineup]\n          [--screenshot out.png [--warmup seconds] [--at x,y,z,yawDeg,pitchDeg]]");
                     return 0;
             }
         }
@@ -104,7 +107,11 @@ static class Program
 
         if (audioTest) return AudioSelfTest(volume);
 
-        var game = new Core.Game(GameMap.TwoFortLite(), seed);
+        GameMap map;
+        try { map = GameMap.Create(mapName); }
+        catch (ArgumentException e) { Console.Error.WriteLine(e.Message); return 1; }
+        Palette.Theme = map.Theme;
+        var game = new Core.Game(map, seed);
         var human = game.AddPlayer("You", team, cls);
         // Fill both teams to perTeam players; the human takes one slot on their side.
         for (int i = 0; i < perTeam; i++)
@@ -114,7 +121,7 @@ static class Program
         }
 
         Raylib.SetConfigFlags(ConfigFlags.VSyncHint | ConfigFlags.Msaa4xHint | ConfigFlags.ResizableWindow);
-        Raylib.InitWindow(width, height, "TF Classic - 2fort_lite");
+        Raylib.InitWindow(width, height, $"TF Classic - {map.Name}");
         Raylib.SetExitKey(KeyboardKey.Null);
         Raylib.SetTargetFPS(120);
         Rlgl.SetClipPlanes(2.0, 20000.0);

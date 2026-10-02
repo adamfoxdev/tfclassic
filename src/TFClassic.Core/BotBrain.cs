@@ -100,7 +100,7 @@ public sealed class BotBrain
         defender = defenders < wanted && rng.NextDouble() < Math.Max(defendChance, 0.5);
         if (me.Class.Id == PlayerClassId.Spy) { defender = false; redisguise = 0.5f; }
         if (me.Class.Id == PlayerClassId.Engineer) defender = true;   // engineers dig in and tend their sentry
-        string[] spots = { "flagdoor", "hall", "door" };
+        var spots = game.Map.DefendNodes;
         string side = me.Team == Team.Red ? "R_" : "B_";
         defendNode = game.Map.Nav.Find(side + spots[rng.Next(spots.Length)]);
     }
@@ -633,14 +633,14 @@ public sealed class BotBrain
         {
             string side = me.Team == Team.Red ? "R_" : "B_";
             bool needEntrance = game.TeleporterOf(me, TeleporterRole.Entrance) == null;
-            return game.Map.Nav.Nodes[game.Map.Nav.Find(side + (needEntrance ? "spawnexit" : "bridge"))].Position;
+            return game.Map.Nav.Nodes[game.Map.Nav.Find(side + (needEntrance ? game.Map.TeleporterEntranceNode : game.Map.TeleporterExitNode))].Position;
         }
 
         // A Demoman who just set a detpack backs off toward his own half until it goes off.
         if (detpackRetreat > 0 && me.Class.Id == PlayerClassId.Demoman)
         {
             string side = me.Team == Team.Red ? "R_" : "B_";
-            return game.Map.Nav.Nodes[game.Map.Nav.Find(side + "field")].Position;
+            return game.Map.Nav.Nodes[game.Map.Nav.Find(side + game.Map.FieldNode)].Position;
         }
 
         if (me.CarryingFlag != null) return own.Home;

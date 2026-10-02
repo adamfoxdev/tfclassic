@@ -7,7 +7,7 @@ static class Helpers
 {
     public const float Dt = 1f / 60f;
 
-    public static Game NewGame(int seed = 1) => new(GameMap.TwoFortLite(), seed);
+    public static Game NewGame(int seed = 1, string map = "2fort_lite") => new(GameMap.Create(map), seed);
 
     public static void Run(Game g, float seconds)
     {
