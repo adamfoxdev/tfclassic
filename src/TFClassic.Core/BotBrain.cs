@@ -44,6 +44,7 @@ public sealed class BotBrain
     int buildFails;
     bool triedBuild;
     bool dispenserTried, dispenserStarted;
+    float detpackRetreat;
     bool grenadeThrowing;
     float grenadeHold, grenadeCooldown;
     bool teleCommit, useTele;
@@ -66,6 +67,7 @@ public sealed class BotBrain
         dispenserStarted = false;
         dispenserTried = false;
         useTele = rng.NextDouble() < 0.7;
+        detpackRetreat = 0;
         grenadeThrowing = false;
         grenadeCooldown = 2f + (float)rng.NextDouble() * 5f;
         lastTeleportCount = me.TeleportCount;
@@ -210,6 +212,7 @@ public sealed class BotBrain
         }
 
         GrenadeTick(dt, engaging, distToTarget, ref input);
+        DetpackTick(dt, engaging, distToTarget, ref input);
         if (me.Class.Id == PlayerClassId.Engineer) EngineerTick(dt, wantMove, engaging, ref input);
         UpdateStuck(dt, wantMove && !holdingStill, ref input);
         me.Input = input;
@@ -244,6 +247,23 @@ public sealed class BotBrain
         grenadeHold = Math.Clamp(2.5f - dist / 450f, 0.5f, 2.2f);
         input.Grenade1 = true;
         AimLob(dist, ref input);
+    }
+
+    /// <summary>Set a short-fuse detpack when a target is at mid range, then leave the area.</summary>
+    void DetpackTick(float dt, bool engaging, float dist, ref PlayerInput input)
+    {
+        detpackRetreat = MathF.Max(0f, detpackRetreat - dt);
+        if (me.Class.Id != PlayerClassId.Demoman) return;
+        if (!engaging || me.Detpacks <= 0 || me.CarryingFlag != null || game.DetpackOf(me) != null) return;
+        if (dist < 150f || dist > 320f || reactTimer > 0f || holdingStill) return;
+
+        if (me.DetpackFuseIndex != 0)
+        {
+            input.DetpackFuseNext = true;      // cycle down to the 5 s setting first
+            return;
+        }
+        input.PlaceDetpack = true;
+        detpackRetreat = 6f;
     }
 
     /// <summary>Point the view up by the arc a thrown grenade needs to reach the target.</summary>
@@ -537,6 +557,13 @@ public sealed class BotBrain
             string side = me.Team == Team.Red ? "R_" : "B_";
             bool needEntrance = game.TeleporterOf(me, TeleporterRole.Entrance) == null;
             return game.Map.Nav.Nodes[game.Map.Nav.Find(side + (needEntrance ? "spawnexit" : "bridge"))].Position;
+        }
+
+        // A Demoman who just set a detpack backs off toward his own half until it goes off.
+        if (detpackRetreat > 0 && me.Class.Id == PlayerClassId.Demoman)
+        {
+            string side = me.Team == Team.Red ? "R_" : "B_";
+            return game.Map.Nav.Nodes[game.Map.Nav.Find(side + "field")].Position;
         }
 
         if (me.CarryingFlag != null) return own.Home;

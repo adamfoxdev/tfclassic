@@ -25,6 +25,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Left mouse | fire (sniper: hold to charge, release to shoot) |
 | Right mouse | Demoman: detonate pipebombs. Engineer: build a sentry (again to demolish it) |
 | `1` `2` `3` / wheel | switch weapon |
+| `V` / `C` | Demoman: set a detpack / cycle its fuse (5, 20, 50 s) |
 | `Q` / `E` | hold to prime a frag / concussion grenade (cook it), release to throw |
 | `Tab` | scoreboard |
 | `F` / `G` | Spy: cycle disguise as an enemy class / feign death |
@@ -43,7 +44,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Numpad `Enter` or `.` | alt-fire (detonate pipebombs, build/demolish sentry) |
 | Numpad `+` / `-` | next / previous weapon |
 | Numpad `1` / `3` | hold to prime a frag / concussion grenade |
-| Numpad `*` / `/` | Spy: disguise / feign death. Engineer: `*` builds a dispenser, `/` teleporters |
+| Numpad `*` / `/` | Spy: disguise / feign death. Engineer: `*` dispenser, `/` teleporters. Demoman: `*` detpack, `/` fuse |
 | Numpad `1`-`8` | choose a class in the menu |
 
 ### Rules
@@ -63,6 +64,15 @@ come online). Hit your own sentry with the wrench to upgrade it (100 metal per l
 rockets) or, once maxed, to repair and reload it (10 metal per swing). Sentries only shoot enemies, need line of
 sight, and can be shot, burned, blown up or clubbed down; the owner is credited with their kills. One sentry per
 engineer; resupply lockers only top metal up by 20 per visit. Bot engineers build one at their post and tend it.
+
+**Detpack (Demoman):** `C` picks the fuse (5, 20 or 50 s; HUD shows it), `V` sets the pack about 56 units in front of
+you. It takes 3 s to arm (press `V` again in that window to pick it back up), then the fuse counts down and it goes
+off for **600 damage in 330 units**: enough to wipe a flag room and destroy sentries, dispensers and teleporters in
+range, blocked by walls like any explosion (knockback is capped so nobody is launched into orbit). The owner takes
+the blast too if they stay near. **Counterplay:** any enemy who stands beside an armed pack for 3 s defuses it (the
+progress bar is visible to everyone and drains if they step away), a spy's knife defuses it instantly, and shooting it
+apart (40 HP) also stops it. You get one per life, refilled at lockers. A blinking LED speeds up as the fuse runs down
+(only your team sees it on the radar). Bot demomen lay a 5 s pack when an enemy is at mid range, then back off.
 
 **Grenades:** every class carries frag grenades (Soldier, Demoman and HWGuy 4, the rest 2); Scout (3) and Medic (2)
 also carry concussion grenades. Hold `Q` (frag) or `E` (concussion) to **prime** it and release to throw; the fuse is
@@ -92,7 +102,7 @@ metal (entrance outside their spawn building, exit at the front of their half), 
 All engineer structures share one code path (`Structure`): shooting, burning, explosions (rockets and grenades
 detonate on them), melee, spy sabotage and wrench repair behave identically for sentries, dispensers and teleporters.
 
-**Not yet implemented:** detpacks, infection, caltrops and the class-specific grenades (napalm, MIRV, nail, gas, EMP). (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
+**Not yet implemented:** infection, caltrops and the class-specific grenades (napalm, MIRV, nail, gas, EMP). (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
 
 ## The map
 

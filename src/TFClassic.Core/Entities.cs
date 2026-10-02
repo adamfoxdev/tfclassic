@@ -13,6 +13,8 @@ public struct PlayerInput
     public bool BuildDispenser; // edge: build or demolish a dispenser (Engineer)
     public bool Grenade1;     // held: prime/cook a frag grenade, release to throw
     public bool Grenade2;     // held: same for the secondary (concussion) grenade
+    public bool PlaceDetpack;   // edge: Demoman sets a detpack (or cancels one that is still arming)
+    public bool DetpackFuseNext; // edge: cycle the detpack timer 5 / 20 / 50 s
     public bool BuildTeleporter; // edge: build entrance, then exit, then demolish both (Engineer)
     public bool AltFire;    // held
     public float Yaw;       // radians; 0 faces +Z, increasing turns left
@@ -61,6 +63,8 @@ public sealed class Player
     public float FeignTimer, FeignCooldown;
     public float SlowTime;
     public int TeleportCount;
+    public int Detpacks;
+    public int DetpackFuseIndex = 1;   // index into Detpack.Fuses (default 20 s)
 
     // Hand grenades: [0] frag, [1] concussion. Primed = -1 when nothing is being cooked.
     public int[] Grenades = new int[2];
@@ -233,4 +237,25 @@ public sealed class Teleporter : Structure
     public static readonly Vector3 HullHalf = new(24, 5, 24);
     protected override Vector3 Half => HullHalf;
     public override string Label => Role == TeleporterRole.Entrance ? "teleporter entrance" : "teleporter exit";
+}
+
+/// <summary>
+/// A Demoman's timed charge. Arms 3 s after being set (BuildTimer counts the arming), then counts down its fuse
+/// and detonates for huge damage. Enemies who linger beside it disarm it; it can also be shot apart.
+/// </summary>
+public sealed class Detpack : Structure
+{
+    public static readonly float[] Fuses = { 5f, 20f, 50f };
+    public const float Damage = 600f, Radius = 330f, DisarmTime = 3f, DisarmReach = 48f;
+    public const int MaxHealth = 40;
+
+    public float Fuse;
+    public float DisarmProgress;
+    public Player? Disarmer;
+
+    public Detpack() { Health = MaxHealth; BuildTimer = 3f; }
+
+    public static readonly Vector3 HullHalf = new(12, 8, 12);
+    protected override Vector3 Half => HullHalf;
+    public override string Label => "detpack";
 }

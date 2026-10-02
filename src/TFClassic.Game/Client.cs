@@ -24,7 +24,7 @@ sealed class Client
 
     float yaw, pitch;
     int pendingSlot = -1;
-    bool pendingDisguise, pendingFeign, pendingDispenser, pendingTeleporter;
+    bool pendingDisguise, pendingFeign, pendingDispenser, pendingTeleporter, pendingDetpack, pendingDetpackFuse;
     bool swallowKpEnter;   // the key that closed the menu must not also count as alt-fire
     double accumulator;
     float time;
@@ -59,7 +59,7 @@ sealed class Client
                 else PushInput();
                 game.Tick(Dt);
                 pendingSlot = -1;
-                pendingDisguise = pendingFeign = pendingDispenser = pendingTeleporter = false;
+                pendingDisguise = pendingFeign = pendingDispenser = pendingTeleporter = pendingDetpack = pendingDetpackFuse = false;
                 accumulator -= Dt;
             }
 
@@ -189,6 +189,9 @@ sealed class Client
         if (Raylib.IsKeyPressed(KeyboardKey.B) || Raylib.IsKeyPressed(KeyboardKey.KpMultiply)) pendingDispenser = true;
         // Engineer: T builds the teleporter entrance, then the exit, then demolishes the pair (numpad / as an alternative).
         if (Raylib.IsKeyPressed(KeyboardKey.T) || Raylib.IsKeyPressed(KeyboardKey.KpDivide)) pendingTeleporter = true;
+        // Demoman: V sets a detpack, C cycles its fuse 5 / 20 / 50 s (numpad * and / as alternatives).
+        if (Raylib.IsKeyPressed(KeyboardKey.V) || Raylib.IsKeyPressed(KeyboardKey.KpMultiply)) pendingDetpack = true;
+        if (Raylib.IsKeyPressed(KeyboardKey.C) || Raylib.IsKeyPressed(KeyboardKey.KpDivide)) pendingDetpackFuse = true;
         if (Raylib.IsKeyPressed(KeyboardKey.G) || Raylib.IsKeyPressed(KeyboardKey.KpDivide)) pendingFeign = true;
 
         if (Raylib.IsKeyPressed(KeyboardKey.KpAdd)) pendingSlot = (me.Slot + 1) % me.Class.Slots.Length;
@@ -221,7 +224,7 @@ sealed class Client
         var input = new PlayerInput
         {
             SelectSlot = pendingSlot, Yaw = yaw, Pitch = pitch,
-            DisguiseNext = pendingDisguise, Feign = pendingFeign, BuildDispenser = pendingDispenser, BuildTeleporter = pendingTeleporter,
+            DisguiseNext = pendingDisguise, Feign = pendingFeign, BuildDispenser = pendingDispenser, BuildTeleporter = pendingTeleporter, PlaceDetpack = pendingDetpack, DetpackFuseNext = pendingDetpackFuse,
         };
         if (!menuOpen)
         {

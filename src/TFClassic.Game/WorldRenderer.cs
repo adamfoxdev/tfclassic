@@ -23,6 +23,7 @@ sealed class WorldRenderer
         DrawSentries();
         DrawDispensers();
         DrawTeleporters();
+        DrawDetpacks();
         DrawFlags(time);
         DrawProjectiles();
         DrawEffects();
@@ -196,6 +197,33 @@ sealed class WorldRenderer
             Raylib.DrawCubeV(barPos, new Vector3(26, 2, 2), new Color(30, 30, 30, 200));
             Raylib.DrawCubeV(barPos + new Vector3(-13 * (1 - frac), 0, 0), new Vector3(26 * frac, 3, 3),
                 frac > 0.5f ? new Color(90, 230, 90, 255) : new Color(240, 90, 70, 255));
+        }
+    }
+
+    void DrawDetpacks()
+    {
+        foreach (var d in game.Detpacks)
+        {
+            var team = Palette.Team(d.Team);
+            Rlgl.PushMatrix();
+            Rlgl.Translatef(d.Position.X, d.Position.Y, d.Position.Z);
+            Rlgl.Rotatef(d.Yaw * (180f / MathF.PI), 0, 1, 0);
+            Draw3D.Box(new Vector3(-12, 0, -12), new Vector3(12, 10, 12), new Color(84, 92, 62, 255), true);        // charge
+            Draw3D.Box(new Vector3(-12, 3, -12), new Vector3(12, 6, 12), team, true);                               // team band
+            Rlgl.PopMatrix();
+
+            // LED: steady amber while arming, then blinking faster as the fuse runs down.
+            bool on = d.Building || ((int)(game.Time * (d.Fuse < 5f ? 10 : d.Fuse < 12f ? 5 : 2)) % 2 == 0);
+            var led = d.Building ? new Color(255, 190, 60, 255) : on ? new Color(255, 50, 40, 255) : new Color(90, 20, 20, 255);
+            Raylib.DrawSphere(d.Position + new Vector3(0, 13, 0), 3f, led);
+
+            if (d.DisarmProgress > 0)
+            {
+                float frac = Math.Clamp(d.DisarmProgress / Detpack.DisarmTime, 0f, 1f);
+                var bar = d.Position + new Vector3(0, 28, 0);
+                Raylib.DrawCubeV(bar, new Vector3(30, 3, 3), new Color(30, 30, 30, 220));
+                Raylib.DrawCubeV(bar + new Vector3(-15 * (1 - frac), 0, 0), new Vector3(30 * frac, 4, 4), new Color(90, 220, 255, 255));
+            }
         }
     }
 

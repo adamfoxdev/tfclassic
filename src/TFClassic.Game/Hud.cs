@@ -35,6 +35,7 @@ sealed class Hud
         DrawFlagStatus(me, w, h);
         DrawEngineer(me, w, h);
         DrawSpy(me, w, h);
+        DrawDemoman(me, w, h);
         if (me.Class.Id != PlayerClassId.Spy && me.SlowTime > 0) Text("SLOWED", w / 2 - 40, h / 2 + 100, 22, new Color(150, 200, 255, 255));
 
         if (!me.Alive)
@@ -154,6 +155,26 @@ sealed class Hud
         }
     }
 
+    void DrawDemoman(Player me, int w, int h)
+    {
+        if (me.Class.Id != PlayerClassId.Demoman) return;
+
+        float fuse = Detpack.Fuses[me.DetpackFuseIndex];
+        var pack = game.DetpackOf(me);
+        string status = pack == null
+            ? me.Detpacks > 0
+                ? $"Detpack: ready  (V to set, fuse {fuse:0}s - C to change)"
+                : "Detpack: none left  (restock at a locker)"
+            : pack.Building
+                ? "Detpack: arming...  (V to pick it back up)"
+                : $"Detpack: ARMED  {MathF.Ceiling(pack.Fuse)}s";
+        var color = pack != null && !pack.Building ? new Color(255, 120, 100, 255) : Color.White;
+        Text(status, 24, h - 150, 18, color);
+
+        if (me.NoticeTimer > 0)
+            TextCentered(me.Notice, w / 2, h / 2 + 70, 22, new Color(255, 230, 120, 255));
+    }
+
     void DrawSpy(Player me, int w, int h)
     {
         if (me.Class.Id != PlayerClassId.Spy) return;
@@ -261,6 +282,12 @@ sealed class Hud
             var m = Map(f.Position);
             Raylib.DrawRectangle((int)m.X - 3, (int)m.Y - 3, 7, 7, Palette.Team(f.Team));
         }
+        foreach (var dt in game.Detpacks)
+        {
+            if (dt.Team != me.Team) continue;            // enemy charges are a surprise
+            var dm = Map(dt.Position);
+            Raylib.DrawRectangle((int)dm.X - 1, (int)dm.Y - 1, 3, 3, new Color(255, 80, 60, 255));
+        }
         foreach (var tp in game.Teleporters)
         {
             if (tp.Team != me.Team && !game.World.LineOfSight(me.Eye, tp.Hull.Center)) continue;
@@ -341,9 +368,9 @@ sealed class Hud
 
         TextCentered(firstJoin ? "Press 1-9 to choose a class, ENTER to join" : "Press 1-9 to choose, ENTER to confirm (applies on respawn or in your resupply room)",
             w / 2, y + 20, 20, Color.White);
-        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: sentry / B dispenser / T teleporters  -  1/2/3 weapons  -  Q/E grenades (hold to cook)  -  F/G spy  -  TAB scores  -  M menu  -  ESC quit",
+        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: sentry / B dispenser / T teleporters  -  1/2/3 weapons  -  Q/E grenades (hold to cook)  -  V/C demoman detpack  -  F/G spy  -  TAB scores  -  M menu  -  ESC quit",
             w / 2, y + 56, 16, Color.LightGray);
-        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  1/3 grenades  -  Enter or . alt-fire  -  +/- weapon  -  * disguise/dispenser  -  / feign/teleporter",
+        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  1/3 grenades  -  Enter or . alt-fire  -  +/- weapon  -  * disguise/dispenser/detpack  -  / feign/teleporter/fuse",
             w / 2, y + 80, 16, new Color(255, 230, 140, 255));
     }
 }

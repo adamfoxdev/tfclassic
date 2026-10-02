@@ -57,7 +57,8 @@ public sealed record ClassDef(
     int[] MaxAmmo /* indexed by AmmoType */,
     int MaxMetal = 0,
     int Frag = 2,
-    int Concussion = 0);
+    int Concussion = 0,
+    int Detpacks = 0);
 
 public static class Classes
 {
@@ -69,7 +70,7 @@ public static class Classes
         new(PlayerClassId.Soldier, "Soldier", 100, 200, 100, 240,
             new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.RocketLauncher }, 2, new[] { 0, 100, 0, 50, 0 }, Frag: 4),
         new(PlayerClassId.Demoman, "Demoman", 90, 120, 50, 280,
-            new[] { WeaponId.Shotgun, WeaponId.GrenadeLauncher, WeaponId.PipebombLauncher }, 1, new[] { 0, 75, 0, 50, 0 }, Frag: 4),
+            new[] { WeaponId.Shotgun, WeaponId.GrenadeLauncher, WeaponId.PipebombLauncher }, 1, new[] { 0, 75, 0, 50, 0 }, Frag: 4, Detpacks: 1),
         new(PlayerClassId.HeavyWeapons, "HWGuy", 100, 300, 150, 230,
             new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.AssaultCannon }, 2, new[] { 0, 200, 0, 0, 0 }, Frag: 4),
         new(PlayerClassId.Sniper, "Sniper", 90, 50, 0, 250,

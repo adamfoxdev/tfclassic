@@ -15,9 +15,10 @@ public sealed class Game
     public List<Sentry> Sentries { get; } = new();
     public List<Dispenser> Dispensers { get; } = new();
     public List<Teleporter> Teleporters { get; } = new();
+    public List<Detpack> Detpacks { get; } = new();
 
     /// <summary>Every engineer-built structure currently in the world.</summary>
-    public IEnumerable<Structure> Structures => Sentries.Cast<Structure>().Concat(Dispensers).Concat(Teleporters);
+    public IEnumerable<Structure> Structures => Sentries.Cast<Structure>().Concat(Dispensers).Concat(Teleporters).Concat(Detpacks);
     public List<Effect> Effects { get; } = new();
     public List<GameEvent> Events { get; } = new();
     public Flag[] Flags { get; }
@@ -107,6 +108,7 @@ public sealed class Game
         p.CarryingFlag = null;
         p.Grenades[0] = p.Class.Frag;
         p.Grenades[1] = p.Class.Concussion;
+        p.Detpacks = p.Class.Detpacks;
         p.Primed = -1;
         p.ConcussTime = 0;
         p.DisguiseTeam = null;
@@ -136,6 +138,7 @@ public sealed class Game
         UpdateSentries(dt);
         UpdateDispensers(dt);
         UpdateTeleporters(dt);
+        UpdateDetpacks(dt);
         UpdateProjectiles(dt);
         UpdateFlags(dt);
         UpdateEffects(dt);
@@ -206,7 +209,8 @@ public sealed class Game
     void Resupply(Player p)
     {
         bool changed = p.Health < p.Class.MaxHealth || p.Armor < p.Class.MaxArmor || p.Metal < p.Class.MaxMetal
-                       || p.Grenades[0] < p.Class.Frag || p.Grenades[1] < p.Class.Concussion;
+                       || p.Grenades[0] < p.Class.Frag || p.Grenades[1] < p.Class.Concussion
+                       || p.Detpacks < p.Class.Detpacks;
         for (int i = 1; i < p.Ammo.Length; i++)
             if (p.Ammo[i] < p.Class.MaxAmmo[i]) changed = true;
         if (!changed) return;
@@ -215,6 +219,7 @@ public sealed class Game
         p.Metal = Math.Min(p.Class.MaxMetal, p.Metal + 20);   // lockers only top metal up a little
         p.Grenades[0] = p.Class.Frag;
         p.Grenades[1] = p.Class.Concussion;
+        p.Detpacks = p.Class.Detpacks;
         for (int i = 0; i < p.Ammo.Length; i++) p.Ammo[i] = p.Class.MaxAmmo[i];
         p.ResupplyCooldown = 3f;
     }
@@ -233,6 +238,11 @@ public sealed class Game
         }
         if (p.Class.Id == PlayerClassId.Engineer && inp.BuildDispenser) ToggleDispenser(p);
         if (p.Class.Id == PlayerClassId.Engineer && inp.BuildTeleporter) ToggleTeleporter(p);
+        if (p.Class.Id == PlayerClassId.Demoman)
+        {
+            if (inp.DetpackFuseNext) p.DetpackFuseIndex = (p.DetpackFuseIndex + 1) % Detpack.Fuses.Length;
+            if (inp.PlaceDetpack) PlaceDetpack(p);
+        }
         if (p.Feigning) return;
 
         if (inp.SelectSlot >= 0 && inp.SelectSlot < p.Class.Slots.Length && inp.SelectSlot != p.Slot)
@@ -644,6 +654,7 @@ public sealed class Game
             if (q.SpawnProtect > 0) continue;
 
             var knock = away * full * 6f;
+            if (knock.LengthSquared() > 1100f * 1100f) knock = Vector3.Normalize(knock) * 1100f;
             Damage(q, owner, self ? full * 0.5f : full, weapon, knock);
         }
 
@@ -654,6 +665,91 @@ public sealed class Game
             if (d >= radius || !World.LineOfSight(pos, s.Hull.Center)) continue;
             DamageStructure(s, owner, damage * (1f - d / radius), weapon);
         }
+    }
+
+    // ───────────────────────── detpacks ─────────────────────────
+
+    public Detpack? DetpackOf(Player p) => Detpacks.FirstOrDefault(d => d.Owner == p && !d.Dead);
+
+    /// <summary>Demoman's detpack key: set one in front of you; pressed again while it is still arming, pick it back up.</summary>
+    void PlaceDetpack(Player p)
+    {
+        var existing = DetpackOf(p);
+        if (existing != null)
+        {
+            if (existing.Building)
+            {
+                existing.Dead = true;
+                p.Detpacks++;
+                Notice(p, "Detpack picked up");
+            }
+            else
+            {
+                Notice(p, $"Detpack armed: {MathF.Ceiling(existing.Fuse)}s left");
+            }
+            return;
+        }
+        if (p.Detpacks <= 0) { Notice(p, "No detpacks left"); return; }
+        if (!FindBuildSpot(p, Detpack.HullHalf, out var spot)) return;
+
+        p.Detpacks--;
+        float fuse = Detpack.Fuses[p.DetpackFuseIndex];
+        Detpacks.Add(new Detpack { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw, Fuse = fuse });
+        Notice(p, $"Setting detpack ({fuse:0}s fuse)...");
+    }
+
+    void Disarm(Detpack pack, Player? by)
+    {
+        if (pack.Dead) return;
+        pack.Dead = true;
+        Effects.Add(new Effect { Kind = EffectKind.Heal, A = pack.Hull.Center, Life = 0.4f, MaxLife = 0.4f, Team = by?.Team ?? pack.Team });
+        if (by != null)
+        {
+            by.Frags++;
+            Events.Add(new GameEvent(Time, $"{by.Name} disarmed {pack.Owner.Name}'s detpack", by.Team));
+            Notice(pack.Owner, "Your detpack was disarmed!");
+        }
+    }
+
+    void UpdateDetpacks(float dt)
+    {
+        foreach (var d in Detpacks)
+        {
+            if (d.Dead) continue;
+            if (d.Building) { d.BuildTimer -= dt; continue; }
+
+            d.Fuse -= dt;
+            if (d.Fuse <= 0)
+            {
+                d.Dead = true;
+                Explode(d.Hull.Center, d.Owner, Detpack.Damage, Detpack.Radius, "Detpack");
+                continue;
+            }
+
+            // Any enemy who stays beside it long enough defuses it.
+            Player? near = null;
+            foreach (var q in Players)
+            {
+                if (!q.Alive || q.Team == d.Team || q.Feigning) continue;
+                float dx = q.Position.X - d.Position.X, dz = q.Position.Z - d.Position.Z;
+                if (dx * dx + dz * dz < Detpack.DisarmReach * Detpack.DisarmReach && MathF.Abs(q.Position.Y - d.Position.Y) < 60f)
+                {
+                    near = q;
+                    break;
+                }
+            }
+            if (near != null)
+            {
+                d.Disarmer = near;
+                d.DisarmProgress += dt;
+                if (d.DisarmProgress >= Detpack.DisarmTime) Disarm(d, near);
+            }
+            else
+            {
+                d.DisarmProgress = MathF.Max(0f, d.DisarmProgress - dt * 2f);
+            }
+        }
+        Detpacks.RemoveAll(d => d.Dead);
     }
 
     // ───────────────────────── hand grenades ─────────────────────────
@@ -838,6 +934,11 @@ public sealed class Game
 
     void SabotageStructure(Player spy, Structure s)
     {
+        if (s is Detpack pack)
+        {
+            Disarm(pack, spy);
+            return;
+        }
         if (s.Building || s.Sabotaged) return;
         s.SabotageTimer = 4f;
         s.Saboteur = spy;
@@ -1356,6 +1457,7 @@ public sealed class Game
         Sentries.Clear();
         Dispensers.Clear();
         Teleporters.Clear();
+        Detpacks.Clear();
         foreach (var p in Players) Respawn(p);
     }
 
