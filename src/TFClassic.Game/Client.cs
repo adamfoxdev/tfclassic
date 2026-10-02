@@ -68,7 +68,7 @@ sealed class Client
     }
 
     /// <summary>Runs the sim for a while with the human idle, then saves a frame and exits.</summary>
-    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false)
+    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false, bool infectEveryone = false)
     {
         me.Input = new PlayerInput { SelectSlot = -1, Yaw = me.Yaw };
         for (float t = 0; t < warmupSeconds; t += Dt)
@@ -84,6 +84,12 @@ sealed class Client
             pitch = at[4] * MathF.PI / 180f;
             me.Yaw = yaw;
             me.Pitch = pitch;
+        }
+        if (infectEveryone)
+        {
+            // Debug aid: everyone (including the viewer) looks infected, to check the visuals.
+            var other = game.Players.FirstOrDefault(q => q != me && q.Team != me.Team) ?? game.Players.First(q => q != me);
+            foreach (var q in game.Players) q.InfectedBy = q == me ? other : me;
         }
         if (buildTeleporters)
         {

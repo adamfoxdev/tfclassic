@@ -109,6 +109,7 @@ public sealed class Game
         p.Grenades[0] = p.Class.Frag;
         p.Grenades[1] = p.Class.Concussion;
         p.Detpacks = p.Class.Detpacks;
+        p.InfectedBy = null;
         p.Primed = -1;
         p.ConcussTime = 0;
         p.DisguiseTeam = null;
@@ -199,6 +200,12 @@ public sealed class Game
             }
         }
 
+        if (p.IsInfected)
+        {
+            UpdateInfection(p, dt);
+            if (!p.Alive) return;
+        }
+
         if (p.ResupplyCooldown <= 0 && World.InZone(ZoneKind.Resupply, p.Center, p.Team))
             Resupply(p);
 
@@ -210,12 +217,13 @@ public sealed class Game
     {
         bool changed = p.Health < p.Class.MaxHealth || p.Armor < p.Class.MaxArmor || p.Metal < p.Class.MaxMetal
                        || p.Grenades[0] < p.Class.Frag || p.Grenades[1] < p.Class.Concussion
-                       || p.Detpacks < p.Class.Detpacks;
+                       || p.Detpacks < p.Class.Detpacks || p.IsInfected;
         for (int i = 1; i < p.Ammo.Length; i++)
             if (p.Ammo[i] < p.Class.MaxAmmo[i]) changed = true;
         if (!changed) return;
         p.Health = p.Class.MaxHealth;
         p.Armor = p.Class.MaxArmor;
+        p.InfectedBy = null;                                   // the locker's disinfectant
         p.Metal = Math.Min(p.Class.MaxMetal, p.Metal + 20);   // lockers only top metal up a little
         p.Grenades[0] = p.Class.Frag;
         p.Grenades[1] = p.Class.Concussion;
@@ -424,7 +432,14 @@ public sealed class Game
 
         if (best.Team == p.Team)
         {
-            if (best.Health < best.Class.MaxHealth)
+            bool cured = best.IsInfected;
+            if (cured)
+            {
+                best.InfectedBy = null;
+                Notice(best, "A medic cured your infection");
+                Notice(p, $"Cured {best.Name}'s infection");
+            }
+            if (best.Health < best.Class.MaxHealth || cured)
             {
                 best.Health = MathF.Min(best.Class.MaxHealth, best.Health + 14);
                 best.BurnTime = 0;
@@ -444,6 +459,7 @@ public sealed class Game
         else
         {
             Damage(best, p, w.Damage, w.Name, fwd * 90f);
+            if (w.Mode == FireMode.Heal) Infect(best, p);
         }
     }
 
@@ -665,6 +681,50 @@ public sealed class Game
             if (d >= radius || !World.LineOfSight(pos, s.Hull.Center)) continue;
             DamageStructure(s, owner, damage * (1f - d / radius), weapon);
         }
+    }
+
+    // ───────────────────────── medic infection ─────────────────────────
+
+    public const float InfectionInterval = 2f, InfectionDamage = 3f, InfectionSpreadRadius = 130f, InfectionSpreadChance = 0.4f;
+
+    /// <summary>A medikit hit leaves the enemy infected (Medics are immune, and an existing infection isn't overwritten).</summary>
+    void Infect(Player victim, Player medic)
+    {
+        if (!victim.Alive || victim.IsInfected || victim.Class.Id == PlayerClassId.Medic) return;
+        if (victim.Team == medic.Team) return;
+        victim.InfectedBy = medic;
+        victim.InfectionTick = InfectionInterval;
+        Notice(victim, "You are infected! Find a medic or a resupply locker");
+        Events.Add(new GameEvent(Time, $"{medic.Name} infected {victim.Name}", medic.Team));
+    }
+
+    /// <summary>The disease drains health (armor doesn't help) and hops to teammates standing close by.</summary>
+    void UpdateInfection(Player p, float dt)
+    {
+        var source = p.InfectedBy!;
+        if (source.Team == p.Team) { p.InfectedBy = null; return; }   // the infecting medic changed sides
+
+        p.InfectionTick -= dt;
+        if (p.InfectionTick > 0) return;
+        p.InfectionTick = InfectionInterval;
+
+        Effects.Add(new Effect { Kind = EffectKind.Heal, A = p.Center + new Vector3(0, 30, 0), Life = 0.4f, MaxLife = 0.4f, Team = p.Team });
+        foreach (var q in Players)
+        {
+            if (q == p || !q.Alive || q.Team != p.Team || q.IsInfected) continue;
+            if (q.Class.Id == PlayerClassId.Medic) continue;
+            float dx = q.Position.X - p.Position.X, dz = q.Position.Z - p.Position.Z;
+            if (dx * dx + dz * dz > InfectionSpreadRadius * InfectionSpreadRadius || MathF.Abs(q.Position.Y - p.Position.Y) > 60f) continue;
+            if (!World.LineOfSight(p.Center, q.Center)) continue;
+            if (Rng.NextDouble() < InfectionSpreadChance)
+            {
+                q.InfectedBy = source;
+                q.InfectionTick = InfectionInterval;
+                Notice(q, "You caught an infection! Find a medic or a resupply locker");
+            }
+        }
+
+        Damage(p, source, InfectionDamage, "Infection", Vector3.Zero, ignoreArmor: true);
     }
 
     // ───────────────────────── detpacks ─────────────────────────
@@ -1310,13 +1370,13 @@ public sealed class Game
 
     // ───────────────────────── damage / death ─────────────────────────
 
-    public void Damage(Player victim, Player? attacker, float amount, string weapon, Vector3 knock)
+    public void Damage(Player victim, Player? attacker, float amount, string weapon, Vector3 knock, bool ignoreArmor = false)
     {
         if (!victim.Alive || victim.SpawnProtect > 0) return;
         if (attacker != null && attacker != victim && attacker.Team == victim.Team) return;
 
         BreakDisguise(victim);
-        float absorbed = MathF.Min(victim.Armor, amount * 0.6f);
+        float absorbed = ignoreArmor ? 0f : MathF.Min(victim.Armor, amount * 0.6f);
         victim.Armor -= absorbed;
         victim.Health -= amount - absorbed;
 
@@ -1335,6 +1395,7 @@ public sealed class Game
         victim.BurnTime = 0;
         victim.SniperCharge = 0;
         victim.Feigning = false;
+        victim.InfectedBy = null;
         victim.DisguiseTeam = null;
         if (victim.Primed >= 0) ThrowGrenade(victim, dropped: true);
 

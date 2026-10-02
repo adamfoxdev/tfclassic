@@ -57,13 +57,21 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 ### Classes
 
 Scout, Soldier (rocket jumping works), Demoman (grenade launcher + sticky pipebombs), HWGuy, Sniper (charged
-shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning), Engineer (sentry gun, dispenser, teleporters), Spy (disguise, backstab, sabotage).
+shots, headshots), Medic (medikit heals teammates, infects enemies), Pyro (flamethrower, burning), Engineer (sentry gun, dispenser, teleporters), Spy (disguise, backstab, sabotage).
 
 **Engineer / sentry gun:** right-click builds a sentry about 56 units in front of you for 130 metal (it takes 3 s to
 come online). Hit your own sentry with the wrench to upgrade it (100 metal per level, up to level 3 which adds
 rockets) or, once maxed, to repair and reload it (10 metal per swing). Sentries only shoot enemies, need line of
 sight, and can be shot, burned, blown up or clubbed down; the owner is credited with their kills. One sentry per
 engineer; resupply lockers only top metal up by 20 per visit. Bot engineers build one at their post and tend it.
+
+**Infection (Medic):** the medikit is a weapon too: hitting an *enemy* with it does 20 damage and **infects** them.
+An infected player loses 3 health every 2 s, *ignoring armor* (the Medic who infected them gets the kill), is
+surrounded by green poison motes that everyone can see, and **spreads the disease** to teammates standing within
+130 units in line of sight (40% per tick). Medics are immune. It's cured by any friendly Medic's medikit (hit your
+teammate with it), by walking into a resupply locker, or by dying. A nearby Medic is a field hospital and an
+infected player running into a crowd is a liability. Bot medics chase and infect enemies who come within reach
+and tend infected or hurt teammates.
 
 **Detpack (Demoman):** `C` picks the fuse (5, 20 or 50 s; HUD shows it), `V` sets the pack about 56 units in front of
 you. It takes 3 s to arm (press `V` again in that window to pick it back up), then the fuse counts down and it goes
@@ -102,7 +110,7 @@ metal (entrance outside their spawn building, exit at the front of their half), 
 All engineer structures share one code path (`Structure`): shooting, burning, explosions (rockets and grenades
 detonate on them), melee, spy sabotage and wrench repair behave identically for sentries, dispensers and teleporters.
 
-**Not yet implemented:** infection, caltrops and the class-specific grenades (napalm, MIRV, nail, gas, EMP). (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
+**Not yet implemented:** caltrops and the class-specific grenades (napalm, MIRV, nail, gas, EMP). (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
 
 ## The map
 

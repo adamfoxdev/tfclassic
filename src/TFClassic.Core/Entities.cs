@@ -63,6 +63,11 @@ public sealed class Player
     public float FeignTimer, FeignCooldown;
     public float SlowTime;
     public int TeleportCount;
+
+    // Medic infection: who infected this player (null = healthy) and when the next tick is due.
+    public Player? InfectedBy;
+    public float InfectionTick;
+    public bool IsInfected => InfectedBy != null;
     public int Detpacks;
     public int DetpackFuseIndex = 1;   // index into Detpack.Fuses (default 20 s)
 

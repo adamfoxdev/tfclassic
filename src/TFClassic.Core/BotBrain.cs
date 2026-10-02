@@ -44,6 +44,8 @@ public sealed class BotBrain
     int buildFails;
     bool triedBuild;
     bool dispenserTried, dispenserStarted;
+    Player? healTarget;
+    float healScanTimer;
     float detpackRetreat;
     bool grenadeThrowing;
     float grenadeHold, grenadeCooldown;
@@ -118,6 +120,7 @@ public sealed class BotBrain
         UpdateTarget(dt);
         Vector3 moveDir = Navigate(dt, out bool wantMove);
         if (me.Class.Id == PlayerClassId.Spy) SpyTick(dt, ref moveDir, ref wantMove);
+        if (me.Class.Id == PlayerClassId.Medic) MedicTick(dt, ref moveDir, ref wantMove);
 
         // Aim: at the target if we have one, otherwise where we're walking.
         float desiredYaw = me.Yaw, desiredPitch = 0f;
@@ -212,6 +215,7 @@ public sealed class BotBrain
         }
 
         GrenadeTick(dt, engaging, distToTarget, ref input);
+        if (me.Class.Id == PlayerClassId.Medic) MedicAct(ref input);
         DetpackTick(dt, engaging, distToTarget, ref input);
         if (me.Class.Id == PlayerClassId.Engineer) EngineerTick(dt, wantMove, engaging, ref input);
         UpdateStuck(dt, wantMove && !holdingStill, ref input);
@@ -247,6 +251,68 @@ public sealed class BotBrain
         grenadeHold = Math.Clamp(2.5f - dist / 450f, 0.5f, 2.2f);
         input.Grenade1 = true;
         AimLob(dist, ref input);
+    }
+
+    /// <summary>
+    /// Medics tend teammates who are infected or hurt, and otherwise close in on nearby enemies to infect them
+    /// with the medikit (the disease then spreads through their team).
+    /// </summary>
+    void MedicTick(float dt, ref Vector3 moveDir, ref bool wantMove)
+    {
+        healScanTimer -= dt;
+        if (healTarget != null && (!healTarget.Alive || !NeedsMedic(healTarget))) healTarget = null;
+        if (healScanTimer <= 0)
+        {
+            healScanTimer = 0.5f;
+            Player? best = null;
+            float bestScore = float.MaxValue;
+            foreach (var q in game.Players)
+            {
+                if (q == me || !q.Alive || q.Team != me.Team || !NeedsMedic(q)) continue;
+                float d = Vector3.Distance(me.Position, q.Position);
+                if (d > 450f || !game.World.LineOfSight(me.Eye, q.Center)) continue;
+                float score = d - (q.IsInfected ? 150f : 0f);       // infected teammates first
+                if (score < bestScore) { bestScore = score; best = q; }
+            }
+            healTarget = best;
+        }
+
+        Vector3 to;
+        if (healTarget != null && !(HasTarget && Vector3.Distance(me.Eye, TargetCenter) < 250f))
+            to = healTarget.Position - me.Position;
+        else if (target != null && target.Alive && Vector3.Distance(me.Eye, target.Center) < 260f)
+            to = target.Position - me.Position;                      // go and infect him
+        else
+            return;
+
+        to.Y = 0;
+        float flat = to.Length();
+        if (flat < 40f) { wantMove = false; return; }
+        moveDir = to / flat;
+        wantMove = true;
+    }
+
+    static bool NeedsMedic(Player q) => q.IsInfected || q.Health < q.Class.MaxHealth * 0.75f;
+
+    /// <summary>Face the teammate being tended (or the enemy being infected) and swing the medikit.</summary>
+    void MedicAct(ref PlayerInput input)
+    {
+        Player? subject = null;
+        if (healTarget != null && healTarget.Alive && !(HasTarget && Vector3.Distance(me.Eye, TargetCenter) < 250f))
+            subject = healTarget;
+        else if (target != null && target.Alive && Vector3.Distance(me.Eye, target.Center) < 100f)
+            subject = target;
+        if (subject == null) return;
+
+        var to = subject.Center - me.Eye;
+        if (to.Length() > 80f) return;
+        aimYaw = MathF.Atan2(to.X, to.Z);
+        aimPitch = MathF.Atan2(to.Y, MathF.Sqrt(to.X * to.X + to.Z * to.Z));
+        input.Yaw = aimYaw;
+        input.Pitch = aimPitch;
+        if (me.Slot != 0) input.SelectSlot = 0;
+        input.Fire = true;
+        holdingStill = true;
     }
 
     /// <summary>Set a short-fuse detpack when a target is at mid range, then leave the area.</summary>
@@ -498,6 +564,9 @@ public sealed class BotBrain
                 break;
             case PlayerClassId.Spy:
                 if (dist < 120 || targetSentry != null) want = 0;   // knife for backstabs and sabotage
+                break;
+            case PlayerClassId.Medic:
+                if (dist < 100) want = 0;                           // medikit: infects whoever it hits
                 break;
         }
 

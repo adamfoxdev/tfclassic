@@ -30,6 +30,7 @@ sealed class Hud
         if (me.Alive) DrawCrosshair(me, w, h);
         DrawVitals(me, w, h);
         DrawGrenades(me, w, h);
+        DrawInfected(me, w, h);
         DrawScoreBar(me, w);
         DrawKillFeed(w);
         DrawFlagStatus(me, w, h);
@@ -129,6 +130,20 @@ sealed class Hud
         if (me.CarryingFlag != null)
             TextCentered(own.AtHome ? "YOU HAVE THE FLAG - GET BACK TO YOUR BASE!" : "YOU HAVE THE FLAG - YOUR FLAG IS MISSING, RECOVER IT!",
                 w / 2, h / 2 + 120, 24, new Color(255, 230, 90, 255));
+    }
+
+    void DrawInfected(Player me, int w, int h)
+    {
+        if (me.Alive && me.IsInfected)
+        {
+            float pulse = 0.5f + 0.5f * MathF.Sin(game.Time * 4f);
+            Raylib.DrawRectangle(0, 0, w, h, new Color(90, 190, 40, (int)(28 + 22 * pulse)));
+            TextCentered("INFECTED", w / 2, h / 2 + 150, 26, new Color(170, 255, 90, 255));
+            TextCentered("a medic's medikit or a resupply locker will cure you - it spreads to teammates!", w / 2, h / 2 + 182, 16, Color.White);
+        }
+
+        if (me.Class.Id == PlayerClassId.Medic)
+            Text("medikit: hit enemies to infect them, teammates to cure & heal", 24, h - 150, 14, Color.LightGray);
     }
 
     void DrawGrenades(Player me, int w, int h)
@@ -259,6 +274,7 @@ sealed class Hud
             if (Vector3.Dot(toCam, Vector3.Normalize(cam.Target - cam.Position)) <= 0) continue;
             var s = Raylib.GetWorldToScreen(pos, cam);
             string label = p.CarryingFlag != null ? $"{p.Name} [FLAG]" : p.Name;
+            if (p.IsInfected) label += " [INFECTED]";
             int tw = Raylib.MeasureText(label, 14);
             Text(label, (int)s.X - tw / 2, (int)s.Y, 14, Palette.Team(me.Team));
         }

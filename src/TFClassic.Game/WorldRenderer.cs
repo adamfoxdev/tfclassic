@@ -67,6 +67,21 @@ sealed class WorldRenderer
         Draw3D.Box(new Vector3(-16, 36, 2), new Vector3(-9, 44, 34), Palette.Shade(new Color(45, 45, 50, 255), blink), true);   // weapon
 
         Rlgl.PopMatrix();
+
+        if (p.IsInfected) DrawInfection(p);
+    }
+
+    /// <summary>Sickly green motes drifting up around an infected player, visible to everyone.</summary>
+    void DrawInfection(Player p)
+    {
+        for (int i = 0; i < 5; i++)
+        {
+            float phase = game.Time * 0.9f + i * 1.26f;
+            float rise = phase % 1f;
+            float a = i * 2.1f + game.Time * 1.5f;
+            var pos = p.Position + new Vector3(MathF.Cos(a) * (14 + rise * 8), 20 + rise * 60, MathF.Sin(a) * (14 + rise * 8));
+            Raylib.DrawSphere(pos, 4.6f - rise * 2.2f, new Color(120, 220, 60, (int)(230 * (1f - rise))));
+        }
     }
 
     void DrawSentries()
