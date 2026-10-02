@@ -15,6 +15,7 @@ public sealed partial class GameMap
         {
             Name = "frost_trench",
             Theme = MapTheme.Snow,
+            Blurb = "A snow trench with two bridges; each flag sits on a raised plateau with stairs on three sides.",
             DefendNodes = new[] { "plat", "flag", "gate" },
             TeleporterExitNode = "brE",
             TeleporterEntranceNode = "spawnexit",

@@ -25,7 +25,7 @@ sealed class Client
     PlayerClassId menuClass;
     Team menuTeam;
 
-    bool quit;
+    bool quit, changeMap;
     float yaw, pitch;
     int pendingSlot = -1;
     bool pendingDisguise, pendingFeign, pendingDispenser, pendingTeleporter, pendingDetpack, pendingDetpackFuse;
@@ -46,10 +46,15 @@ sealed class Client
         menuOpen = !headless;
     }
 
-    public void Run()
+    public enum Exit { Quit, ChangeMap }
+
+    /// <summary>Runs until the player quits or asks to change map (from the class menu); can be called again to resume.</summary>
+    public Exit Run()
     {
-        Raylib.EnableCursor();
-        while (!quit && !Raylib.WindowShouldClose())
+        changeMap = false;
+        Raylib.PollInputEvents();   // the key that got us here (e.g. ENTER in the map menu) must not also count in this menu
+        if (menuOpen) Raylib.EnableCursor(); else Raylib.DisableCursor();
+        while (!quit && !changeMap && !Raylib.WindowShouldClose())
         {
             float frame = MathF.Min(Raylib.GetFrameTime(), 0.1f);
             lastFrame = frame;
@@ -74,6 +79,7 @@ sealed class Client
             PlaySounds();
             Render();
         }
+        return changeMap ? Exit.ChangeMap : Exit.Quit;
     }
 
     void PlaySounds()
@@ -225,6 +231,7 @@ sealed class Client
 
     void UpdateMenu()
     {
+        if (Raylib.IsKeyPressed(KeyboardKey.N)) changeMap = true;
         if (Raylib.IsKeyPressed(KeyboardKey.T))
             menuTeam = menuTeam.Opposite();
 

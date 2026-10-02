@@ -14,7 +14,9 @@ dotnet run --project src/TFClassic.Game
 dotnet run --project src/TFClassic.Game -- --bots 8 --team red --class sniper
 ```
 
-Options: `--map <name>` (`--list-maps` to list; prefixes like `bunker` work), `--mute`, `--volume 0..1`, `--bots N` (players per team, default 6), `--team red|blue`, `--class <name>`, `--seed N`,
+Without `--map` the game opens a **map menu** (arrows/W/S, 1-9 or mouse, Enter to start; each map shows a top-down preview). Press **M** then **N** in game to go back to it and start a new match (Esc returns to the current one).
+
+Options: `--map <name>` (skips the menu; `--list-maps` to list; prefixes like `bunker` work), `--mute`, `--volume 0..1`, `--bots N` (players per team, default 6), `--team red|blue`, `--class <name>`, `--seed N`,
 `--width W --height H`.
 
 ### Controls

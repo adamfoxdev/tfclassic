@@ -15,6 +15,7 @@ public sealed partial class GameMap
         {
             Name = "bunker_yard",
             Theme = MapTheme.Desert,
+            Blurb = "Desert compounds around a central depot: cross it indoors, over the roof, or around either flank.",
             DefendNodes = new[] { "flagdoor", "yard", "gate" },
             TeleporterExitNode = "stairs",
             TeleporterEntranceNode = "spawnexit",

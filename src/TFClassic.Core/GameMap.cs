@@ -16,6 +16,9 @@ public sealed partial class GameMap
     public string Name { get; init; } = "";
     public MapTheme Theme { get; init; } = MapTheme.Grassland;
 
+    /// <summary>One-line description shown in the map menu.</summary>
+    public string Blurb { get; init; } = "";
+
     /// <summary>Playable extent on the ground plane (X, Z), used for the radar.</summary>
     public Vector2 BoundsMin { get; init; } = new(-1000, -2000);
     public Vector2 BoundsMax { get; init; } = new(1000, 2000);
@@ -83,7 +86,7 @@ public sealed partial class GameMap
 
     public static GameMap TwoFortLite()
     {
-        var m = new GameMap { Name = "2fort_lite" };
+        var m = new GameMap { Name = "2fort_lite", Blurb = "Two fortresses either side of a river. One bridge, roof decks, a spawn building each." };
         m.BuildGeometry();
         m.BuildGameplay();
         m.BuildNav();
