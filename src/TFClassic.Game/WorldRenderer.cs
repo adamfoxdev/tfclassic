@@ -25,6 +25,7 @@ sealed class WorldRenderer
         DrawTeleporters();
         DrawDetpacks();
         DrawFirePatches();
+        DrawAreaEffects();
         DrawFlags(time);
         DrawProjectiles();
         DrawEffects();
@@ -32,6 +33,10 @@ sealed class WorldRenderer
 
         Rlgl.EnableBackfaceCulling();
     }
+
+    /// <summary>A gassed viewer sees some players' team colours flicker to the wrong side.</summary>
+    public static bool Hallucinating(Core.Game game, Player viewer, Player p) =>
+        viewer.GasTime > 0 && p != viewer && ((int)(game.Time * 1.3f) + p.Id * 7) % 3 == 0;
 
     void DrawWater()
     {
@@ -52,7 +57,9 @@ sealed class WorldRenderer
 
         // Enemies of a fully disguised spy see the disguise instead of the spy.
         bool fooled = p.IsDisguised && viewer.Team != p.Team;
-        var team = Palette.Team(fooled ? p.DisguiseTeam!.Value : p.Team);
+        var shownTeam = fooled ? p.DisguiseTeam!.Value : p.Team;
+        if (Hallucinating(game, viewer, p)) shownTeam = shownTeam.Opposite();   // gassed: friend and foe swap colours
+        var team = Palette.Team(shownTeam);
         var cls = Palette.ClassColor(fooled ? p.DisguiseClass : p.Class.Id);
         float blink = p.SpawnProtect > 0 && ((int)(game.Time * 10) % 2 == 0) ? 0.5f : 1f;
 
@@ -216,6 +223,55 @@ sealed class WorldRenderer
         }
     }
 
+    void DrawAreaEffects()
+    {
+        foreach (var a in game.AreaEffects)
+        {
+            switch (a.Kind)
+            {
+                case AreaKind.Caltrops:
+                    for (int i = 0; i < 20; i++)
+                    {
+                        float seed = i * 12.9898f + a.Position.X * 0.37f + a.Position.Z * 0.11f;
+                        float ang = (seed * 7.1f) % MathF.Tau;
+                        float rad = a.Radius * (((seed * 3.7f) % 1f) * 0.9f + 0.05f);
+                        var p = a.Position + new Vector3(MathF.Cos(ang) * rad, 0, MathF.Sin(ang) * rad);
+                        Rlgl.PushMatrix();
+                        Rlgl.Translatef(p.X, p.Y, p.Z);
+                        Rlgl.Rotatef(seed * 40f, 0, 1, 0);
+                        Draw3D.Box(new Vector3(-3, 0, -3), new Vector3(3, 2, 3), new Color(120, 120, 128, 255), true);
+                        Draw3D.Box(new Vector3(-1, 2, -1), new Vector3(1, 7, 1), new Color(200, 200, 210, 255));
+                        Rlgl.PopMatrix();
+                    }
+                    break;
+
+                case AreaKind.NailGrenade:
+                    Rlgl.PushMatrix();
+                    Rlgl.Translatef(a.Position.X, a.Position.Y + MathF.Sin(game.Time * 8f) * 2f, a.Position.Z);
+                    Rlgl.Rotatef(game.Time * 900f, 0, 1, 0);
+                    Draw3D.Box(new Vector3(-6, -5, -6), new Vector3(6, 5, 6), new Color(150, 150, 160, 255), true);
+                    Draw3D.Box(new Vector3(-9, -1, -1), new Vector3(9, 1, 1), new Color(220, 220, 230, 255));
+                    Draw3D.Box(new Vector3(-1, -1, -9), new Vector3(1, 1, 9), new Color(220, 220, 230, 255));
+                    Rlgl.PopMatrix();
+                    break;
+
+                case AreaKind.GasCloud:
+                {
+                    float fade = Math.Clamp(a.Life / 1.5f, 0f, 1f);
+                    for (int i = 0; i < 9; i++)
+                    {
+                        float seed = i * 2.399f;
+                        float drift = game.Time * 0.35f + seed;
+                        var p = a.Position + new Vector3(MathF.Cos(seed * 3f + drift) * a.Radius * 0.55f,
+                            12f + (i % 3) * 22f + MathF.Sin(drift * 1.7f) * 6f, MathF.Sin(seed * 3f + drift) * a.Radius * 0.55f);
+                        Raylib.DrawSphere(p, a.Radius * (0.32f + 0.04f * (i % 3)), new Color(130, 210, 60, (int)(52 * fade)));
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
     /// <summary>Napalm fire: a scorched, glowing floor with flames licking up from random spots.</summary>
     void DrawFirePatches()
     {
@@ -314,15 +370,32 @@ sealed class WorldRenderer
                 case ProjectileKind.Pipe:
                     Raylib.DrawSphere(pr.Position, 5f, Palette.Team(pr.Team));
                     break;
+                case ProjectileKind.MirvBomblet:
+                    Raylib.DrawSphere(pr.Position, 3.2f, ((int)(game.Time * 16) % 2 == 0) ? new Color(255, 190, 60, 255) : new Color(170, 60, 50, 255));
+                    break;
                 case ProjectileKind.HandGrenade:
                 case ProjectileKind.Concussion:
                 case ProjectileKind.Napalm:
+                case ProjectileKind.Caltrops:
+                case ProjectileKind.Nail:
+                case ProjectileKind.Mirv:
+                case ProjectileKind.Gas:
+                case ProjectileKind.Emp:
                 {
                     // Flashes faster as the fuse runs down.
                     float left = pr.Fuse - pr.Age;
                     bool flash = left < 1f && ((int)(left * (left < 0.4f ? 14 : 7)) % 2 == 0);
-                    var body = pr.Kind == ProjectileKind.HandGrenade ? new Color(60, 100, 60, 255)
-                        : pr.Kind == ProjectileKind.Napalm ? new Color(235, 130, 40, 255) : new Color(90, 190, 230, 255);
+                    var body = pr.Kind switch
+                    {
+                        ProjectileKind.HandGrenade => new Color(60, 100, 60, 255),
+                        ProjectileKind.Napalm => new Color(235, 130, 40, 255),
+                        ProjectileKind.Caltrops => new Color(150, 150, 158, 255),
+                        ProjectileKind.Nail => new Color(205, 205, 215, 255),
+                        ProjectileKind.Mirv => new Color(170, 60, 50, 255),
+                        ProjectileKind.Gas => new Color(120, 200, 70, 255),
+                        ProjectileKind.Emp => new Color(90, 140, 255, 255),
+                        _ => new Color(90, 190, 230, 255),
+                    };
                     Raylib.DrawSphere(pr.Position, 4.5f, flash ? new Color(255, 80, 60, 255) : body);
                     break;
                 }
@@ -347,6 +420,15 @@ sealed class WorldRenderer
                 case EffectKind.Concussion:
                     Raylib.DrawSphere(e.A, e.Radius * (0.15f + 0.85f * t), new Color(120, 210, 255, (int)(110 * (1 - t))));
                     Raylib.DrawSphereWires(e.A, e.Radius * (0.15f + 0.85f * t), 10, 10, new Color(220, 245, 255, (int)(200 * (1 - t))));
+                    break;
+                case EffectKind.Emp:
+                    Raylib.DrawSphere(e.A, e.Radius * (0.1f + 0.9f * t), new Color(110, 160, 255, (int)(70 * (1 - t))));
+                    Raylib.DrawSphereWires(e.A, e.Radius * (0.1f + 0.9f * t), 8, 8, new Color(230, 245, 255, (int)(255 * (1 - t))));
+                    for (int i = 0; i < 6; i++)   // crackling arcs
+                    {
+                        float a = i * 1.047f + t * 9f;
+                        Raylib.DrawLine3D(e.A, e.A + new Vector3(MathF.Cos(a), 0.3f * MathF.Sin(a * 3f), MathF.Sin(a)) * e.Radius * t, new Color(200, 230, 255, 255));
+                    }
                     break;
                 case EffectKind.Flame:
                     for (int i = 1; i <= 6; i++)

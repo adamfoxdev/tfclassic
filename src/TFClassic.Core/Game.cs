@@ -17,6 +17,7 @@ public sealed class Game
     public List<Teleporter> Teleporters { get; } = new();
     public List<Detpack> Detpacks { get; } = new();
     public List<FirePatch> FirePatches { get; } = new();
+    public List<AreaEffect> AreaEffects { get; } = new();
 
     /// <summary>Every engineer-built structure currently in the world.</summary>
     public IEnumerable<Structure> Structures => Sentries.Cast<Structure>().Concat(Dispensers).Concat(Teleporters).Concat(Detpacks);
@@ -111,6 +112,7 @@ public sealed class Game
         p.Grenades[1] = p.Class.Secondary;
         p.Detpacks = p.Class.Detpacks;
         p.InfectedBy = null;
+        p.GasTime = 0;
         p.Primed = -1;
         p.ConcussTime = 0;
         p.DisguiseTeam = null;
@@ -142,6 +144,7 @@ public sealed class Game
         UpdateTeleporters(dt);
         UpdateDetpacks(dt);
         UpdateFirePatches(dt);
+        UpdateAreaEffects(dt);
         UpdateProjectiles(dt);
         UpdateFlags(dt);
         UpdateEffects(dt);
@@ -163,11 +166,12 @@ public sealed class Game
         p.ResupplyCooldown = MathF.Max(0, p.ResupplyCooldown - dt);
 
         p.SlowTime = MathF.Max(0, p.SlowTime - dt);
-        if (p.ConcussTime > 0)
+        p.GasTime = MathF.Max(0, p.GasTime - dt);
+        if (p.ConcussTime > 0 || p.GasTime > 0)
         {
-            // A concussed player's aim wanders: the crosshair stays put but shots land off to the side.
+            // A concussed or gassed player's aim wanders: the crosshair stays put but shots land off to the side.
             p.ConcussTime = MathF.Max(0, p.ConcussTime - dt);
-            float wobble = 0.09f * MathF.Min(1f, p.ConcussTime / 2f);
+            float wobble = 0.09f * MathF.Min(1f, MathF.Max(p.ConcussTime, p.GasTime) / 2f);
             p.Input.Yaw += wobble * MathF.Sin(Time * 9f);
             p.Input.Pitch += wobble * MathF.Cos(Time * 7f);
         }
@@ -546,6 +550,12 @@ public sealed class Game
                 case ProjectileKind.HandGrenade:
                 case ProjectileKind.Concussion:
                 case ProjectileKind.Napalm:
+                case ProjectileKind.Caltrops:
+                case ProjectileKind.Nail:
+                case ProjectileKind.Mirv:
+                case ProjectileKind.MirvBomblet:
+                case ProjectileKind.Gas:
+                case ProjectileKind.Emp:
                     UpdateBouncer(pr, dt);
                     break;
             }
@@ -866,13 +876,27 @@ public sealed class Game
             {
                 GrenadeKind.Frag => ProjectileKind.HandGrenade,
                 GrenadeKind.Concussion => ProjectileKind.Concussion,
-                _ => ProjectileKind.Napalm,
+                GrenadeKind.Napalm => ProjectileKind.Napalm,
+                GrenadeKind.Caltrops => ProjectileKind.Caltrops,
+                GrenadeKind.Nail => ProjectileKind.Nail,
+                GrenadeKind.Mirv => ProjectileKind.Mirv,
+                GrenadeKind.Gas => ProjectileKind.Gas,
+                _ => ProjectileKind.Emp,
             },
             Owner = p,
             Team = p.Team,
-            Damage = kind == GrenadeKind.Frag ? FragDamage : kind == GrenadeKind.Napalm ? NapalmBurst : 0f,
-            Splash = kind switch { GrenadeKind.Frag => FragRadius, GrenadeKind.Concussion => ConcussionRadius, _ => FirePatch.Radius },
-            Fuse = fuse,
+            Damage = kind switch { GrenadeKind.Frag => FragDamage, GrenadeKind.Napalm => NapalmBurst, GrenadeKind.Mirv => MirvDamage, _ => 0f },
+            Splash = kind switch
+            {
+                GrenadeKind.Frag => FragRadius,
+                GrenadeKind.Concussion => ConcussionRadius,
+                GrenadeKind.Napalm => FirePatch.Radius,
+                GrenadeKind.Mirv => MirvRadius,
+                GrenadeKind.Gas => GasRadius,
+                GrenadeKind.Emp => EmpRadius,
+                _ => 0f,
+            },
+            Fuse = kind == GrenadeKind.Caltrops ? 0.5f : fuse,     // caltrops scatter on landing; cooking is pointless
         };
 
         if (inHand)
@@ -911,6 +935,24 @@ public sealed class Game
             case ProjectileKind.Napalm:
                 ExplodeNapalm(pr.Position, pr.Owner, pr.Damage);
                 break;
+            case ProjectileKind.Caltrops:
+                SpawnCaltrops(pr.Position, pr.Owner);
+                break;
+            case ProjectileKind.Nail:
+                SpawnArea(AreaKind.NailGrenade, pr.Position + new Vector3(0, 24, 0), pr.Owner, NailRange, NailDuration);
+                break;
+            case ProjectileKind.Mirv:
+                ExplodeMirv(pr);
+                break;
+            case ProjectileKind.MirvBomblet:
+                Explode(pr.Position, pr.Owner, pr.Damage, pr.Splash, "MIRV");
+                break;
+            case ProjectileKind.Gas:
+                SpawnArea(AreaKind.GasCloud, pr.Position + new Vector3(0, 10, 0), pr.Owner, GasRadius, GasDuration);
+                break;
+            case ProjectileKind.Emp:
+                ExplodeEmp(pr.Position, pr.Owner, pr.Splash);
+                break;
             default:
                 Explode(pr.Position, pr.Owner, pr.Damage, pr.Splash, "Grenade");
                 break;
@@ -918,6 +960,10 @@ public sealed class Game
     }
 
     const float NapalmBurst = 20f;
+    const float MirvDamage = 70f, MirvRadius = 130f, BombletDamage = 65f, BombletRadius = 120f;
+    const float GasRadius = 170f, GasDuration = 7f, NailRange = 450f, NailDuration = 4f, EmpRadius = 240f;
+    const float CaltropRadius = 90f, CaltropDuration = 30f;
+    const int CaltropCharges = 8;
 
     /// <summary>A fireball that lights everyone close by, then burns on as a patch of flames on the floor.</summary>
     void ExplodeNapalm(Vector3 pos, Player owner, float burst)
@@ -940,6 +986,194 @@ public sealed class Game
         if (World.InZone(ZoneKind.Water, floor + new Vector3(0, 6, 0))) return;
 
         FirePatches.Add(new FirePatch { Owner = owner, Team = owner.Team, Position = floor });
+    }
+
+    // ───────── the rest of the special grenades ─────────
+
+    /// <summary>A parent blast, then four bomblets that bounce outward and each go off a moment later.</summary>
+    void ExplodeMirv(Projectile pr)
+    {
+        Explode(pr.Position, pr.Owner, pr.Damage, pr.Splash, "MIRV");
+        for (int i = 0; i < 4; i++)
+        {
+            float a = i * MathF.PI / 2f + (float)Rng.NextDouble() * 0.6f;
+            Projectiles.Add(new Projectile
+            {
+                Kind = ProjectileKind.MirvBomblet,
+                Owner = pr.Owner,
+                Team = pr.Team,
+                Position = pr.Position + new Vector3(0, 8, 0),
+                Velocity = new Vector3(MathF.Cos(a) * 240f, 250f, MathF.Sin(a) * 240f),
+                Fuse = 0.6f + (float)Rng.NextDouble() * 0.5f,
+                Damage = BombletDamage,
+                Splash = BombletRadius,
+            });
+        }
+    }
+
+    /// <summary>
+    /// Fries enemy electronics: players lose all their ammo and metal (and take damage proportional to what
+    /// they were carrying), a primed grenade in their hand goes off, sentries and dispensers are emptied,
+    /// detpacks are destroyed and teleporters are knocked offline for a while.
+    /// </summary>
+    void ExplodeEmp(Vector3 pos, Player owner, float radius)
+    {
+        Effects.Add(new Effect { Kind = EffectKind.Emp, A = pos, Life = 0.5f, MaxLife = 0.5f, Radius = radius });
+
+        foreach (var q in Players.ToArray())
+        {
+            if (!q.Alive || q.Team == owner.Team) continue;
+            if (q.Hull.DistanceTo(pos) >= radius || !World.LineOfSight(pos, q.Center)) continue;
+
+            int carried = q.Metal / 2;
+            for (int i = 1; i < q.Ammo.Length; i++)
+            {
+                carried += q.Ammo[i];
+                q.Ammo[i] = 0;
+            }
+            q.Metal = 0;
+            if (q.Primed >= 0) ThrowGrenade(q, inHand: true);
+            if (q.Alive && carried > 0)
+                Damage(q, owner, MathF.Min(90f, carried * 0.25f), "EMP", Vector3.Zero, ignoreArmor: true);
+        }
+
+        foreach (var s in Sentries)
+        {
+            if (s.Dead || s.Team == owner.Team || s.Hull.DistanceTo(pos) >= radius) continue;
+            s.Ammo = 0;
+            s.Rockets = 0;
+        }
+        foreach (var d in Dispensers)
+        {
+            if (d.Dead || d.Team == owner.Team || d.Hull.DistanceTo(pos) >= radius) continue;
+            d.Store = 0;
+        }
+        foreach (var t in Teleporters)
+        {
+            if (t.Dead || t.Team == owner.Team || t.Hull.DistanceTo(pos) >= radius) continue;
+            t.CooldownTimer = 15f;
+        }
+        foreach (var dp in Detpacks)
+        {
+            if (dp.Dead || dp.Team == owner.Team || dp.Hull.DistanceTo(pos) >= radius) continue;
+            dp.Dead = true;
+            Effects.Add(new Effect { Kind = EffectKind.Heal, A = dp.Hull.Center, Life = 0.4f, MaxLife = 0.4f, Team = owner.Team });
+        }
+    }
+
+    Vector3 FloorBelow(Vector3 pos)
+    {
+        if (World.Raycast(pos + new Vector3(0, 8, 0), pos + new Vector3(0, -140, 0), out float t, out _))
+            return pos + new Vector3(0, 8 - 148 * t, 0);
+        return pos;
+    }
+
+    void SpawnCaltrops(Vector3 pos, Player owner)
+    {
+        var floor = FloorBelow(pos);
+        if (World.InZone(ZoneKind.Water, floor + new Vector3(0, 6, 0))) return;
+        AreaEffects.Add(new AreaEffect
+        {
+            Kind = AreaKind.Caltrops, Owner = owner, Team = owner.Team, Position = floor,
+            Radius = CaltropRadius, Life = CaltropDuration, Charges = CaltropCharges,
+        });
+    }
+
+    void SpawnArea(AreaKind kind, Vector3 pos, Player owner, float radius, float life)
+    {
+        Effects.Add(new Effect { Kind = EffectKind.Heal, A = pos, Life = 0.3f, MaxLife = 0.3f, Team = owner.Team });
+        AreaEffects.Add(new AreaEffect { Kind = kind, Owner = owner, Team = owner.Team, Position = pos, Radius = radius, Life = life });
+    }
+
+    void UpdateAreaEffects(float dt)
+    {
+        foreach (var a in AreaEffects)
+        {
+            a.Life -= dt;
+            if (a.Life <= 0) continue;
+            switch (a.Kind)
+            {
+                case AreaKind.Caltrops: UpdateCaltrops(a, dt); break;
+                case AreaKind.NailGrenade: UpdateNailGrenade(a, dt); break;
+                case AreaKind.GasCloud: UpdateGasCloud(a, dt); break;
+            }
+        }
+        AreaEffects.RemoveAll(a => a.Life <= 0);
+    }
+
+    /// <summary>Spikes hurt and slow enemies who walk over them on foot; jumping over them is safe.</summary>
+    void UpdateCaltrops(AreaEffect a, float dt)
+    {
+        foreach (var key in a.Cooldowns.Keys.ToArray())
+        {
+            a.Cooldowns[key] -= dt;
+            if (a.Cooldowns[key] <= 0) a.Cooldowns.Remove(key);
+        }
+
+        foreach (var q in Players)
+        {
+            if (!q.Alive || q.Team == a.Team || q.Feigning || !q.OnGround) continue;
+            if (a.Cooldowns.ContainsKey(q)) continue;
+            float dx = q.Position.X - a.Position.X, dz = q.Position.Z - a.Position.Z;
+            if (dx * dx + dz * dz > a.Radius * a.Radius || MathF.Abs(q.Position.Y - a.Position.Y) > 14f) continue;
+
+            a.Cooldowns[q] = 1f;
+            q.SlowTime = MathF.Max(q.SlowTime, 3f);
+            Damage(q, a.Owner, 10f, "Caltrops", Vector3.Zero, ignoreArmor: true);
+            if (--a.Charges <= 0) { a.Life = 0; return; }
+        }
+    }
+
+    /// <summary>
+    /// A hovering nail grenade: every tick it sprays a couple of nails in random directions and fires one more,
+    /// with some scatter, at an enemy it can see.
+    /// </summary>
+    void UpdateNailGrenade(AreaEffect a, float dt)
+    {
+        a.Tick -= dt;
+        while (a.Tick <= 0)
+        {
+            a.Tick += 0.1f;
+            for (int i = 0; i < 2; i++)
+            {
+                float yaw = (float)Rng.NextDouble() * MathF.Tau;
+                float pitch = ((float)Rng.NextDouble() - 0.4f) * 0.5f;
+                FireNail(a, new Vector3(MathF.Sin(yaw) * MathF.Cos(pitch), MathF.Sin(pitch), MathF.Cos(yaw) * MathF.Cos(pitch)));
+            }
+
+            var targets = Players.Where(q => q.IsTargetableBy(a.Team)
+                && Vector3.Distance(q.Center, a.Position) < a.Radius && World.LineOfSight(a.Position, q.Center)).ToList();
+            if (targets.Count > 0)
+            {
+                var t = targets[Rng.Next(targets.Count)];
+                var aimed = Vector3.Normalize(t.Center - a.Position);
+                FireNail(a, Spread(aimed, 0.09f));
+            }
+        }
+    }
+
+    void FireNail(AreaEffect a, Vector3 dir)
+    {
+        var end = HitscanShot(a.Owner, a.Team, a.Position, dir, a.Radius, 8f, 1f, "Nail Grenade", 6f);
+        AddTracer(a.Position + dir * 8f, end, a.Team);
+    }
+
+    /// <summary>Gas: light damage and dizziness (and hallucinations on the client) for enemies breathing it.</summary>
+    void UpdateGasCloud(AreaEffect a, float dt)
+    {
+        a.Tick -= dt;
+        if (a.Tick > 0) return;
+        a.Tick = 0.5f;
+
+        foreach (var q in Players)
+        {
+            if (!q.Alive || q.Team == a.Team) continue;
+            float dx = q.Position.X - a.Position.X, dz = q.Position.Z - a.Position.Z;
+            if (dx * dx + dz * dz > a.Radius * a.Radius || MathF.Abs(q.Position.Y - a.Position.Y) > 90f) continue;
+            if (!World.LineOfSight(a.Position, q.Center) && !World.LineOfSight(a.Position, q.Position + new Vector3(0, 10, 0))) continue;
+            q.GasTime = MathF.Max(q.GasTime, 3f);
+            Damage(q, a.Owner, 2f, "Gas", Vector3.Zero, ignoreArmor: true);
+        }
     }
 
     void UpdateFirePatches(float dt)
@@ -1589,6 +1823,7 @@ public sealed class Game
         Teleporters.Clear();
         Detpacks.Clear();
         FirePatches.Clear();
+        AreaEffects.Clear();
         foreach (var p in Players) Respawn(p);
     }
 

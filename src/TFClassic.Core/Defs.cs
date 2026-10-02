@@ -16,7 +16,7 @@ public enum WeaponId
     AssaultCannon, SniperRifle, AutoRifle, Flamethrower, Wrench, Knife, Tranquilizer,
 }
 
-public enum GrenadeKind { Frag = 0, Concussion = 1, Napalm = 2 }
+public enum GrenadeKind { Frag = 0, Concussion = 1, Napalm = 2, Caltrops = 3, Nail = 4, Mirv = 5, Gas = 6, Emp = 7 }
 
 public enum FireMode { Melee, Heal, Wrench, Backstab, Tranq, Hitscan, Rocket, Grenade, Pipe, Flame, SniperCharge }
 
@@ -59,10 +59,18 @@ public sealed record ClassDef(
     int Frag = 2,
     int Secondary = 0,
     int Detpacks = 0,
-    GrenadeKind SecondaryKind = GrenadeKind.Concussion)
+    GrenadeKind SecondaryKind = GrenadeKind.Concussion,
+    GrenadeKind PrimaryKind = GrenadeKind.Frag)
 {
-    /// <summary>Grenade slot 0 is always frag; slot 1 is this class's special grenade.</summary>
-    public GrenadeKind GrenadeKindOf(int slot) => slot == 0 ? GrenadeKind.Frag : SecondaryKind;
+    /// <summary>Slot 0 is the class's main grenade (frag for most), slot 1 its special grenade.</summary>
+    public GrenadeKind GrenadeKindOf(int slot) => slot == 0 ? PrimaryKind : SecondaryKind;
+
+    public static string GrenadeName(GrenadeKind k) => k switch
+    {
+        GrenadeKind.Mirv => "MIRV",
+        GrenadeKind.Emp => "EMP",
+        _ => k.ToString().ToLowerInvariant(),
+    };
 }
 
 public static class Classes
@@ -71,13 +79,13 @@ public static class Classes
     public static readonly ClassDef[] All =
     {
         new(PlayerClassId.Scout, "Scout", 75, 50, 25, 400,
-            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.Nailgun }, 2, new[] { 0, 50, 200, 0, 0 }, Secondary: 3),
+            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.Nailgun }, 2, new[] { 0, 50, 200, 0, 0 }, Secondary: 3, PrimaryKind: GrenadeKind.Caltrops),
         new(PlayerClassId.Soldier, "Soldier", 100, 200, 100, 240,
-            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.RocketLauncher }, 2, new[] { 0, 100, 0, 50, 0 }, Frag: 4),
+            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.RocketLauncher }, 2, new[] { 0, 100, 0, 50, 0 }, Frag: 4, Secondary: 2, SecondaryKind: GrenadeKind.Nail),
         new(PlayerClassId.Demoman, "Demoman", 90, 120, 50, 280,
-            new[] { WeaponId.Shotgun, WeaponId.GrenadeLauncher, WeaponId.PipebombLauncher }, 1, new[] { 0, 75, 0, 50, 0 }, Frag: 4, Detpacks: 1),
+            new[] { WeaponId.Shotgun, WeaponId.GrenadeLauncher, WeaponId.PipebombLauncher }, 1, new[] { 0, 75, 0, 50, 0 }, Frag: 4, Secondary: 2, Detpacks: 1, SecondaryKind: GrenadeKind.Mirv),
         new(PlayerClassId.HeavyWeapons, "HWGuy", 100, 300, 150, 230,
-            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.AssaultCannon }, 2, new[] { 0, 200, 0, 0, 0 }, Frag: 4),
+            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.AssaultCannon }, 2, new[] { 0, 200, 0, 0, 0 }, Frag: 4, Secondary: 2, SecondaryKind: GrenadeKind.Mirv),
         new(PlayerClassId.Sniper, "Sniper", 90, 50, 0, 250,
             new[] { WeaponId.Crowbar, WeaponId.SniperRifle, WeaponId.AutoRifle }, 1, new[] { 0, 75, 0, 0, 0 }),
         new(PlayerClassId.Medic, "Medic", 90, 100, 50, 320,
@@ -85,9 +93,9 @@ public static class Classes
         new(PlayerClassId.Pyro, "Pyro", 100, 150, 50, 300,
             new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.Flamethrower }, 2, new[] { 0, 40, 0, 0, 200 }, Secondary: 2, SecondaryKind: GrenadeKind.Napalm),
         new(PlayerClassId.Engineer, "Engineer", 80, 50, 25, 300,
-            new[] { WeaponId.Wrench, WeaponId.Shotgun, WeaponId.Nailgun }, 1, new[] { 0, 50, 100, 0, 0 }, MaxMetal: 200),
+            new[] { WeaponId.Wrench, WeaponId.Shotgun, WeaponId.Nailgun }, 1, new[] { 0, 50, 100, 0, 0 }, MaxMetal: 200, Secondary: 2, SecondaryKind: GrenadeKind.Emp),
         new(PlayerClassId.Spy, "Spy", 90, 100, 25, 300,
-            new[] { WeaponId.Knife, WeaponId.Shotgun, WeaponId.Tranquilizer }, 1, new[] { 0, 40, 60, 0, 0 }),
+            new[] { WeaponId.Knife, WeaponId.Shotgun, WeaponId.Tranquilizer }, 1, new[] { 0, 40, 60, 0, 0 }, Secondary: 2, SecondaryKind: GrenadeKind.Gas),
     };
 
     public static ClassDef Get(PlayerClassId id) => All[(int)id];

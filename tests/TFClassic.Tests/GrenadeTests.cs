@@ -36,9 +36,9 @@ public class GrenadeTests
         var soldier = Human(g, Team.Red, PlayerClassId.Soldier);
         var scout = Human(g, Team.Red, PlayerClassId.Scout);
         var engineer = Human(g, Team.Red, PlayerClassId.Engineer);
-        Assert.Equal(new[] { 4, 0 }, soldier.Grenades);
+        Assert.Equal(new[] { 4, 2 }, soldier.Grenades);   // frags + nail grenades
         Assert.Equal(new[] { 2, 3 }, scout.Grenades);
-        Assert.Equal(new[] { 2, 0 }, engineer.Grenades);
+        Assert.Equal(new[] { 2, 2 }, engineer.Grenades);  // frags + EMPs
     }
 
     [Fact]

@@ -35,7 +35,7 @@ public class NapalmTests
         Assert.Equal(GrenadeKind.Napalm, pyro.Class.SecondaryKind);
         Assert.Equal(new[] { 2, 3 }, scout.Grenades);
         Assert.Equal(GrenadeKind.Concussion, scout.Class.SecondaryKind);
-        Assert.Equal(new[] { 4, 0 }, soldier.Grenades);
+        Assert.Equal(GrenadeKind.Nail, soldier.Class.SecondaryKind);
     }
 
     [Fact]

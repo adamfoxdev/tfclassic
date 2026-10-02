@@ -68,7 +68,7 @@ sealed class Client
     }
 
     /// <summary>Runs the sim for a while with the human idle, then saves a frame and exits.</summary>
-    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false, bool infectEveryone = false)
+    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false, bool infectEveryone = false, bool showGrenadeEffects = false)
     {
         me.Input = new PlayerInput { SelectSlot = -1, Yaw = me.Yaw };
         for (float t = 0; t < warmupSeconds; t += Dt)
@@ -84,6 +84,26 @@ sealed class Client
             pitch = at[4] * MathF.PI / 180f;
             me.Yaw = yaw;
             me.Pitch = pitch;
+        }
+        if (showGrenadeEffects)
+        {
+            // Debug aid: one of each lingering grenade effect, lined up in front of the camera.
+            me.Position = new Vector3(0, 0, 1230);
+            me.Velocity = Vector3.Zero;
+            yaw = MathF.PI; pitch = -0.1f;
+            AreaEffect Area(AreaKind k, float x, float r, float life) => new()
+            {
+                Kind = k, Owner = me, Team = me.Team, Position = new Vector3(x, 0, 800), Radius = r, Life = life, Charges = 8,
+            };
+            game.AreaEffects.Add(Area(AreaKind.Caltrops, -330, 90, 30));
+            var nail = Area(AreaKind.NailGrenade, -20, 450, 30); nail.Position += new Vector3(0, 30, 0);
+            game.AreaEffects.Add(nail);
+            game.AreaEffects.Add(Area(AreaKind.GasCloud, 360, 170, 30));
+            game.FirePatches.Add(new FirePatch { Owner = me, Team = me.Team, Position = new Vector3(-170, 0, 800) });
+            game.Projectiles.Add(new Projectile { Kind = ProjectileKind.Emp, Owner = me, Team = me.Team, Position = new Vector3(160, 50, 800), Stuck = true, Fuse = 0.04f, Splash = 240 });
+            game.Projectiles.Add(new Projectile { Kind = ProjectileKind.Mirv, Owner = me, Team = me.Team, Position = new Vector3(250, 8, 880), Stuck = true, Fuse = 0.1f, Damage = 0, Splash = 130 });
+            for (int i = 0; i < 8; i++) game.Tick(Dt);
+            me.GasTime = 3f;
         }
         if (infectEveryone)
         {

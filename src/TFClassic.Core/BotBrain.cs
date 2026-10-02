@@ -244,9 +244,13 @@ public sealed class BotBrain
             return;
         }
 
-        // Pyros prefer their napalm; everyone else lobs frags (concussions are left for jumping).
-        int slot = me.Class.SecondaryKind == GrenadeKind.Napalm && me.Grenades[1] > 0 ? 1 : 0;
-        if (!engaging || grenadeCooldown > 0f || me.Grenades[slot] <= 0 || me.Primed >= 0) return;
+        // Bots lob whichever offensive grenade they carry: the special one (napalm, nail, MIRV) if they have it,
+        // otherwise a frag. Caltrops, gas, EMP and concussions need more judgement than this, so they stay in the pouch.
+        int slot = -1;
+        var special = me.Class.SecondaryKind;
+        if (me.Grenades[1] > 0 && special is GrenadeKind.Napalm or GrenadeKind.Nail or GrenadeKind.Mirv) slot = 1;
+        else if (me.Grenades[0] > 0 && me.Class.PrimaryKind == GrenadeKind.Frag) slot = 0;
+        if (slot < 0 || !engaging || grenadeCooldown > 0f || me.Primed >= 0) return;
         if (dist < 220f || dist > 700f || reactTimer > 0f || holdingStill) return;
         if (me.Class.Id == PlayerClassId.Spy && me.DisguiseTeam.HasValue) return;   // keep the disguise
 

@@ -148,13 +148,13 @@ sealed class Hud
 
     void DrawGrenades(Player me, int w, int h)
     {
-        string text = $"Q frag x{me.Grenades[0]}";
-        if (me.Class.Secondary > 0) text += $"   E {me.Class.SecondaryKind.ToString().ToLowerInvariant()} x{me.Grenades[1]}";
+        string text = $"Q {ClassDef.GrenadeName(me.Class.PrimaryKind)} x{me.Grenades[0]}";
+        if (me.Class.Secondary > 0) text += $"   E {ClassDef.GrenadeName(me.Class.SecondaryKind)} x{me.Grenades[1]}";
         Text(text, w - 250, h - 140, 14, Color.LightGray);
 
         if (me.Alive && me.Primed >= 0)
         {
-            string kind = me.Class.GrenadeKindOf(me.Primed).ToString().ToUpperInvariant();
+            string kind = ClassDef.GrenadeName(me.Class.GrenadeKindOf(me.Primed)).ToUpperInvariant();
             float frac = Math.Clamp(me.PrimedTimer / 3f, 0f, 1f);
             int bw = 220, bx = w / 2 - bw / 2, by = h / 2 + 60;
             Raylib.DrawRectangle(bx, by, bw, 12, new Color(0, 0, 0, 160));
@@ -163,6 +163,12 @@ sealed class Hud
             TextCentered($"{kind} PRIMED  {me.PrimedTimer:F1}s  (release to throw)", w / 2, by - 22, 16, Color.White);
         }
 
+        if (me.Alive && me.GasTime > 0)
+        {
+            float wobble = 0.5f + 0.5f * MathF.Sin(game.Time * 5f);
+            Raylib.DrawRectangle(0, 0, w, h, new Color(120, 200, 50, (int)(Math.Min(1f, me.GasTime / 2f) * (40 + 30 * wobble))));
+            TextCentered("GASSED  -  you can't trust your eyes", w / 2, h / 2 + 130, 22, new Color(190, 255, 110, 255));
+        }
         if (me.Alive && me.ConcussTime > 0)
         {
             Raylib.DrawRectangle(0, 0, w, h, new Color(120, 200, 255, (int)(Math.Min(1f, me.ConcussTime / 3f) * 55)));
@@ -267,6 +273,7 @@ sealed class Hud
         foreach (var p in game.Players)
         {
             bool friendly = p.Team == me.Team || p.IsDisguisedAs(me.Team);
+            if (WorldRenderer.Hallucinating(game, me, p)) friendly = !friendly;
             if (p == me || !p.Alive || !friendly || p.Feigning) continue;
             if (!game.World.LineOfSight(me.Eye, p.Eye)) continue;
             var pos = p.Position + new Vector3(0, 84, 0);

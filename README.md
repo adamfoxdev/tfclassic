@@ -94,8 +94,20 @@ target). Throw one at your own feet while jumping to **concussion-jump** like a 
 set alight and take 20 damage, and the grenade leaves a **150-unit patch of fire on the floor for 8 s** that every
 0.5 s ignites and burns (8 damage) any enemy standing in it and chews through enemy sentries, dispensers and
 teleporters (6 per tick). Running through it costs far less than standing in it; the fire is blocked by walls, doesn't
-light on water, and never hurts you or your team. Lockers refill grenades. Bots throw cooked frags at visible enemies
-at mid range (Pyro bots lob napalm instead; nobody uses concussions yet).
+light on water, and never hurts you or your team. Lockers refill grenades.
+
+**The other special grenades** (all primed with `Q`/`E` like the rest; none of them hurt your own team):
+
+| Grenade | Class (key) | What it does |
+| --- | --- | --- |
+| Caltrops | Scout (`Q`, replaces the frag) | Scatters spikes on landing (no cooking). For 30 s, enemies walking over the field **on foot** take 10 damage and are slowed for 3 s (once per second each; 8 spikes then it's spent). Jump over it to stay safe. |
+| Nail grenade | Soldier (`E`) | Lands and hovers for ~4 s spraying nails in every direction, plus one aimed (with scatter) at a visible enemy each tick; 8 damage per nail, blocked by walls. |
+| MIRV | Demoman, HWGuy (`E`) | A 70-damage parent blast, then **four bomblets** hop outward and each explode 0.6-1.1 s later for 65 damage. |
+| Gas | Spy (`E`) | A 170-unit cloud for 7 s: enemies breathing it take 2 damage per half second ignoring armor, their aim wobbles, **team colours on their screen flicker to the wrong side** (name tags and the radar lie too) and their disguise, if any, is blown. |
+| EMP | Engineer (`E`) | 240-unit pulse: every enemy in range loses **all** ammo and metal and takes damage proportional to what they were carrying (up to 90, ignoring armor); a grenade they were cooking goes off in their hand; enemy **sentries lose their ammo and rockets, dispensers their store**, **detpacks are destroyed** and teleporters go offline for 15 s. |
+
+Bots throw cooked offensive grenades at visible enemies at mid range: frags, or their special one if it is napalm,
+nail or MIRV. They don't use caltrops, gas, EMP or concussions (those need more tactical judgement).
 
 **Spy:** `F` starts a 2 s disguise as the next enemy class. Once it completes, enemy sentries and bots won't target you
 and enemy players see you as one of their own (class colour, name tag, radar dot). Attacking or taking damage blows it.
@@ -116,7 +128,9 @@ metal (entrance outside their spawn building, exit at the front of their half), 
 All engineer structures share one code path (`Structure`): shooting, burning, explosions (rockets and grenades
 detonate on them), melee, spy sabotage and wrench repair behave identically for sentries, dispensers and teleporters.
 
-**Not yet implemented:** caltrops and the remaining class-specific grenades (MIRV, nail, gas, EMP). (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
+**Differences from the real TFC:** the classes, weapons, grenades and deployables are all here, but combat is simplified
+(no reloads, simple hitboxes, boxy models, no sound), there is one map, no networking, and bots are basic: they
+don't go out of their way to destroy enemy dispensers or teleporters, or to use caltrops, gas, EMP or concussions.
 
 ## The map
 

@@ -77,6 +77,7 @@ public sealed class Player
     public float PrimedTimer;
     public bool PrevGrenade1, PrevGrenade2;
     public float ConcussTime;
+    public float GasTime;     // breathing in a gas cloud: aim wobble, light damage, hallucinations
 
     /// <summary>Fully disguised (the 2 s transition is over).</summary>
     public bool IsDisguised => DisguiseTeam.HasValue && DisguiseTimer <= 0f;
@@ -110,7 +111,7 @@ public sealed class Player
     public Vector3 Right => new(-MathF.Cos(Yaw), 0, MathF.Sin(Yaw));
 }
 
-public enum ProjectileKind { Rocket, Grenade, Pipe, HandGrenade, Concussion, Napalm }
+public enum ProjectileKind { Rocket, Grenade, Pipe, HandGrenade, Concussion, Napalm, Caltrops, Nail, Mirv, MirvBomblet, Gas, Emp }
 
 public sealed class Projectile
 {
@@ -136,7 +137,7 @@ public sealed class Flag
     public bool Dropped => Carrier == null && !AtHome;
 }
 
-public enum EffectKind { Tracer, Explosion, Flame, Gib, Heal, Concussion }
+public enum EffectKind { Tracer, Explosion, Flame, Gib, Heal, Concussion, Emp }
 
 public sealed class Effect
 {
@@ -275,4 +276,20 @@ public sealed class FirePatch
     public Vector3 Position;
     public float Life = Duration;
     public float Tick;
+}
+
+public enum AreaKind { Caltrops, NailGrenade, GasCloud }
+
+/// <summary>A lingering effect left by a special grenade: a caltrop field, a hovering nail grenade or a gas cloud.</summary>
+public sealed class AreaEffect
+{
+    public AreaKind Kind;
+    public Player Owner = null!;
+    public Team Team;
+    public Vector3 Position;
+    public float Radius;
+    public float Life;
+    public float Tick;
+    public int Charges;                                     // caltrops: spikes left
+    public readonly Dictionary<Player, float> Cooldowns = new();   // caltrops: per-victim re-hit delay
 }
