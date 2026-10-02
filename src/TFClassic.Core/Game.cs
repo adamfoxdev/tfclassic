@@ -100,6 +100,11 @@ public sealed class Game
         p.BurnTime = 0;
         p.ResupplyCooldown = 0;
         p.CarryingFlag = null;
+        p.DisguiseTeam = null;
+        p.DisguiseTimer = 0;
+        p.Feigning = false;
+        p.FeignCooldown = 0;
+        p.SlowTime = 0;
         p.Metal = p.Class.MaxMetal;
         p.SpawnCount++;
         p.Input = new PlayerInput { SelectSlot = -1, Yaw = spawn.Yaw };
@@ -140,10 +145,20 @@ public sealed class Game
         p.FireCooldown = MathF.Max(0, p.FireCooldown - dt);
         p.ResupplyCooldown = MathF.Max(0, p.ResupplyCooldown - dt);
 
+        p.SlowTime = MathF.Max(0, p.SlowTime - dt);
+        p.FeignCooldown = MathF.Max(0, p.FeignCooldown - dt);
+        if (p.DisguiseTimer > 0) p.DisguiseTimer = MathF.Max(0, p.DisguiseTimer - dt);
+        if (p.Feigning)
+        {
+            p.FeignTimer -= dt;
+            if (p.FeignTimer <= 0) { p.Feigning = false; p.FeignCooldown = 1.5f; }
+        }
+
         float speedScale = 1f;
         if (p.SniperCharge > 0) speedScale = 0.3f;
         else if (p.Input.Fire && p.Weapon.Id == WeaponId.AssaultCannon) speedScale = 0.45f;
-        if (MatchOver) { p.Input.Forward = 0; p.Input.Right = 0; p.Input.Fire = false; }
+        if (p.SlowTime > 0) speedScale *= 0.45f;
+        if (MatchOver || p.Feigning) { p.Input.Forward = 0; p.Input.Right = 0; p.Input.Fire = false; p.Input.Jump = false; }
 
         Movement.Simulate(World, p, speedScale, dt);
 
@@ -188,6 +203,13 @@ public sealed class Game
     void HandleWeapons(Player p, float dt)
     {
         var inp = p.Input;
+        if (p.Class.Id == PlayerClassId.Spy)
+        {
+            if (inp.Feign) ToggleFeign(p);
+            if (inp.DisguiseNext && !p.Feigning) CycleDisguise(p);
+        }
+        if (p.Feigning) return;
+
         if (inp.SelectSlot >= 0 && inp.SelectSlot < p.Class.Slots.Length && inp.SelectSlot != p.Slot)
         {
             p.Slot = inp.SelectSlot;
@@ -240,6 +262,7 @@ public sealed class Game
 
     void Fire(Player p, WeaponDef w)
     {
+        BreakDisguise(p);
         if (w.Ammo != AmmoType.None) p.Ammo[(int)w.Ammo] -= w.AmmoPerShot;
         var eye = p.Eye;
         var fwd = p.Forward;
@@ -247,10 +270,11 @@ public sealed class Game
         switch (w.Mode)
         {
             case FireMode.Hitscan:
+            case FireMode.Tranq:
                 for (int i = 0; i < w.Pellets; i++)
                 {
                     var dir = Spread(fwd, w.Spread);
-                    var end = HitscanShot(p, p.Team, eye, dir, w.Range, w.Damage, 1.5f, w.Name, 20f);
+                    var end = HitscanShot(p, p.Team, eye, dir, w.Range, w.Damage, 1.5f, w.Name, 20f, w.Mode == FireMode.Tranq ? 3f : 0f);
                     AddTracer(eye + p.Right * -6 + new Vector3(0, -6, 0) + dir * 14, end, p.Team);
                 }
                 break;
@@ -258,6 +282,7 @@ public sealed class Game
             case FireMode.Melee:
             case FireMode.Heal:
             case FireMode.Wrench:
+            case FireMode.Backstab:
                 MeleeAttack(p, w, eye, fwd);
                 break;
 
@@ -292,7 +317,7 @@ public sealed class Game
 
     /// <summary>Fires one ray. Hits the nearest enemy player or sentry in front of the first wall; returns the end point.</summary>
     Vector3 HitscanShot(Player? owner, Team team, Vector3 origin, Vector3 dir, float range, float damage,
-        float headMultiplier, string weapon, float knock)
+        float headMultiplier, string weapon, float knock, float slowSeconds = 0f)
     {
         var delta = dir * range;
         float bestT = 1f;
@@ -302,7 +327,7 @@ public sealed class Game
         Sentry? sentry = null;
         foreach (var q in Players)
         {
-            if (q == owner || !q.Alive || q.Team == team) continue;
+            if (q == owner || !q.Alive || q.Team == team || q.Feigning) continue;
             var hull = q.Hull;
             float t;
             if (hull.Contains(origin)) t = 0;
@@ -324,6 +349,7 @@ public sealed class Game
             bool head = end.Y - victim.Position.Y > 58f;
             Damage(victim, owner, head ? damage * headMultiplier : damage,
                 weapon + (head && headMultiplier >= 2f ? " (headshot)" : ""), dir * knock);
+            if (slowSeconds > 0 && victim.Alive) victim.SlowTime = slowSeconds;
         }
         else if (sentry != null)
         {
@@ -342,7 +368,7 @@ public sealed class Game
         Sentry? bestSentry = null;
         foreach (var q in Players)
         {
-            if (q == p || !q.Alive) continue;
+            if (q == p || !q.Alive || q.Feigning) continue;
             if (q.Team == p.Team && w.Mode != FireMode.Heal) continue;
             var hull = q.Hull.Expand(new Vector3(6));
             float t;
@@ -363,6 +389,7 @@ public sealed class Game
         if (bestSentry != null)
         {
             if (bestSentry.Team == p.Team) WrenchSentry(p, bestSentry);
+            else if (w.Mode == FireMode.Backstab) SabotageSentry(p, bestSentry);
             else DamageSentry(bestSentry, p, w.Damage, w.Name);
             return;
         }
@@ -376,6 +403,16 @@ public sealed class Game
                 best.BurnTime = 0;
                 Effects.Add(new Effect { Kind = EffectKind.Heal, A = best.Center, Life = 0.4f, MaxLife = 0.4f, Team = p.Team });
             }
+        }
+        else if (w.Mode == FireMode.Backstab)
+        {
+            // Behind the victim = the victim is facing away from us.
+            var toAttacker = new Vector3(p.Position.X - best.Position.X, 0, p.Position.Z - best.Position.Z);
+            var victimFacing = new Vector3(MathF.Sin(best.Yaw), 0, MathF.Cos(best.Yaw));
+            bool behind = toAttacker.LengthSquared() < 1f
+                          || Vector3.Dot(victimFacing, Vector3.Normalize(toAttacker)) < -0.3f;
+            if (behind) Damage(best, p, 200f, "Knife (backstab)", fwd * 90f);
+            else Damage(best, p, w.Damage, w.Name, fwd * 90f);
         }
         else
         {
@@ -398,7 +435,7 @@ public sealed class Game
         }
         foreach (var q in Players)
         {
-            if (q == p || !q.Alive || q.Team == p.Team) continue;
+            if (q == p || !q.Alive || q.Team == p.Team || q.Feigning) continue;
             var v = q.Center - eye;
             float d = v.Length();
             if (d > w.Range || d < 1f) continue;
@@ -473,7 +510,7 @@ public sealed class Game
         hitT = maxT;
         foreach (var q in Players)
         {
-            if (!q.Alive || q.Team == pr.Team) continue;
+            if (!q.Alive || q.Team == pr.Team || q.Feigning) continue;
             var hull = q.Hull;
             float t;
             if (hull.Contains(from)) t = 0;
@@ -581,6 +618,61 @@ public sealed class Game
         }
     }
 
+    // ───────────────────────── spy ─────────────────────────
+
+    public void StartDisguise(Player p, Team team, PlayerClassId cls)
+    {
+        p.DisguiseTeam = team;
+        p.DisguiseClass = cls;
+        p.DisguiseTimer = 2f;
+    }
+
+    public void BreakDisguise(Player p)
+    {
+        if (!p.DisguiseTeam.HasValue) return;
+        if (p.IsDisguised) Notice(p, "Disguise blown!");
+        p.DisguiseTeam = null;
+        p.DisguiseTimer = 0;
+    }
+
+    /// <summary>Disguise as the next enemy class (cycling through every class but Spy).</summary>
+    void CycleDisguise(Player p)
+    {
+        int cls = p.DisguiseTeam.HasValue ? (int)p.DisguiseClass : (int)PlayerClassId.Spy;
+        do cls = (cls + 1) % Classes.All.Length; while (cls == (int)PlayerClassId.Spy);
+        StartDisguise(p, p.Team.Opposite(), (PlayerClassId)cls);
+        Notice(p, $"Disguising as {p.DisguiseTeam} {Classes.Get((PlayerClassId)cls).Name}...");
+    }
+
+    void ToggleFeign(Player p)
+    {
+        if (p.Feigning)
+        {
+            p.Feigning = false;
+            p.FeignCooldown = 1.5f;
+            return;
+        }
+        if (p.FeignCooldown > 0 || !p.OnGround) return;
+        if (p.CarryingFlag != null) { Notice(p, "Can't feign death while carrying the flag"); return; }
+
+        BreakDisguise(p);
+        p.Feigning = true;
+        p.FeignTimer = 10f;
+        p.Velocity = new Vector3(0, p.Velocity.Y, 0);
+        Events.Add(new GameEvent(Time, $"{p.Name} died", p.Team.Opposite()));   // the fake corpse announces itself too
+        Effects.Add(new Effect { Kind = EffectKind.Gib, A = p.Center, Life = 0.6f, MaxLife = 0.6f, Team = p.Team });
+    }
+
+    void SabotageSentry(Player spy, Sentry s)
+    {
+        if (s.Building || s.Sabotaged) return;
+        s.SabotageTimer = 4f;
+        s.Saboteur = spy;
+        s.Target = null;
+        Notice(spy, "Sentry sabotaged!");
+        Notice(s.Owner, "Your sentry is being sabotaged! (hit it with the wrench)");
+    }
+
     // ───────────────────────── sentry guns ─────────────────────────
 
     void Notice(Player p, string text)
@@ -630,6 +722,12 @@ public sealed class Game
 
     void WrenchSentry(Player p, Sentry s)
     {
+        if (s.Sabotaged)
+        {
+            s.SabotageTimer = 0;
+            Notice(p, "Sabotage removed");
+            return;
+        }
         if (s.Building) return;
         if (s.Level < 3 && p.Metal >= Sentry.UpgradeCost)
         {
@@ -677,20 +775,27 @@ public sealed class Game
         {
             if (s.Dead) continue;
             if (s.Building) { s.BuildTimer -= dt; continue; }
+            if (s.SabotageTimer > 0)
+            {
+                s.Target = null;
+                s.SabotageTimer -= dt;
+                if (s.SabotageTimer <= 0) DamageSentry(s, s.Saboteur, 99999f, "Sabotage");
+                continue;
+            }
 
             s.FireCooldown -= dt;
             s.RocketCooldown -= dt;
             s.RetargetTimer -= dt;
             var muzzle = s.Muzzle;
 
-            if (s.RetargetTimer <= 0 || s.Target is not { Alive: true })
+            if (s.RetargetTimer <= 0 || s.Target == null || !s.Target.IsTargetableBy(s.Team))
             {
                 s.RetargetTimer = 0.2f;
                 s.Target = null;
                 float bestD = s.Range;
                 foreach (var q in Players)
                 {
-                    if (!q.Alive || q.Team == s.Team) continue;
+                    if (!q.IsTargetableBy(s.Team)) continue;
                     float d = Vector3.Distance(muzzle, q.Center);
                     if (d < bestD && World.LineOfSight(muzzle, q.Center)) { bestD = d; s.Target = q; }
                 }
@@ -738,6 +843,7 @@ public sealed class Game
         if (!victim.Alive || victim.SpawnProtect > 0) return;
         if (attacker != null && attacker != victim && attacker.Team == victim.Team) return;
 
+        BreakDisguise(victim);
         float absorbed = MathF.Min(victim.Armor, amount * 0.6f);
         victim.Armor -= absorbed;
         victim.Health -= amount - absorbed;
@@ -756,6 +862,8 @@ public sealed class Game
         victim.RespawnTimer = victim.IsBot ? 4f : 5f;
         victim.BurnTime = 0;
         victim.SniperCharge = 0;
+        victim.Feigning = false;
+        victim.DisguiseTeam = null;
 
         if (killer != null && killer != victim) killer.Frags++;
         else victim.Frags--;

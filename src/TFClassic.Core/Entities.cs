@@ -8,6 +8,8 @@ public struct PlayerInput
     public float Right;     // -1..1
     public bool Jump;
     public bool Fire;       // held
+    public bool DisguiseNext; // edge: start disguising as the next enemy class (Spy)
+    public bool Feign;        // edge: toggle feigning death (Spy)
     public bool AltFire;    // held
     public float Yaw;       // radians; 0 faces +Z, increasing turns left
     public float Pitch;     // radians; positive looks up
@@ -46,6 +48,20 @@ public sealed class Player
     public Player? BurnOwner;
 
     public Flag? CarryingFlag;
+
+    // Spy state
+    public Team? DisguiseTeam;
+    public PlayerClassId DisguiseClass;
+    public float DisguiseTimer;
+    public bool Feigning;
+    public float FeignTimer, FeignCooldown;
+    public float SlowTime;
+
+    /// <summary>Fully disguised (the 2 s transition is over).</summary>
+    public bool IsDisguised => DisguiseTeam.HasValue && DisguiseTimer <= 0f;
+    public bool IsDisguisedAs(Team t) => IsDisguised && DisguiseTeam == t;
+    /// <summary>Whether automatic defences and bots on <paramref name="team"/> would pick this player as a target.</summary>
+    public bool IsTargetableBy(Team team) => Alive && Team != team && !Feigning && !IsDisguisedAs(team);
     public int Frags, Deaths, Captures;
     public int Metal;
     public string Notice = "";
@@ -129,6 +145,8 @@ public sealed class Sentry
     public float Yaw;
     public int Level = 1;
     public float Health = 150;
+    public float SabotageTimer;
+    public Player? Saboteur;
     public int Ammo = 100, Rockets;
     public float BuildTimer = 3f;
     public float FireCooldown, RocketCooldown, RetargetTimer;
@@ -145,4 +163,5 @@ public sealed class Sentry
     public float Range => RangeByLevel[Level - 1];
     public float TurnRate => TurnByLevel[Level - 1];
     public bool Building => BuildTimer > 0;
+    public bool Sabotaged => SabotageTimer > 0;
 }

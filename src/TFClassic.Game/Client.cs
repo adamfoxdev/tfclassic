@@ -24,6 +24,7 @@ sealed class Client
 
     float yaw, pitch;
     int pendingSlot = -1;
+    bool pendingDisguise, pendingFeign;
     bool swallowKpEnter;   // the key that closed the menu must not also count as alt-fire
     double accumulator;
     float time;
@@ -58,6 +59,7 @@ sealed class Client
                 else PushInput();
                 game.Tick(Dt);
                 pendingSlot = -1;
+                pendingDisguise = pendingFeign = false;
                 accumulator -= Dt;
             }
 
@@ -159,6 +161,10 @@ sealed class Client
         if (Raylib.IsKeyPressed(KeyboardKey.Kp5)) pitch = 0;
         pitch = Math.Clamp(pitch, -1.5f, 1.5f);
 
+        // Spy: F cycles the enemy-class disguise, G feigns death (numpad * and / as alternatives).
+        if (Raylib.IsKeyPressed(KeyboardKey.F) || Raylib.IsKeyPressed(KeyboardKey.KpMultiply)) pendingDisguise = true;
+        if (Raylib.IsKeyPressed(KeyboardKey.G) || Raylib.IsKeyPressed(KeyboardKey.KpDivide)) pendingFeign = true;
+
         if (Raylib.IsKeyPressed(KeyboardKey.KpAdd)) pendingSlot = (me.Slot + 1) % me.Class.Slots.Length;
         if (Raylib.IsKeyPressed(KeyboardKey.KpSubtract))
             pendingSlot = (me.Slot + me.Class.Slots.Length - 1) % me.Class.Slots.Length;
@@ -186,7 +192,11 @@ sealed class Client
 
     void PushInput()
     {
-        var input = new PlayerInput { SelectSlot = pendingSlot, Yaw = yaw, Pitch = pitch };
+        var input = new PlayerInput
+        {
+            SelectSlot = pendingSlot, Yaw = yaw, Pitch = pitch,
+            DisguiseNext = pendingDisguise, Feign = pendingFeign,
+        };
         if (!menuOpen)
         {
             if (Raylib.IsKeyDown(KeyboardKey.W) || Raylib.IsKeyDown(KeyboardKey.Up)) input.Forward += 1;

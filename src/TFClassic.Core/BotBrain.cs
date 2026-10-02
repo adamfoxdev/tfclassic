@@ -39,6 +39,7 @@ public sealed class BotBrain
 
     float aimYaw, aimPitch;
     bool holdingStill;
+    float redisguise;
     float buildTimer;
     int buildFails;
     bool triedBuild;
@@ -79,6 +80,7 @@ public sealed class BotBrain
         int defenders = game.Bots.Count(b => b != this && b.me.Team == me.Team && b.defender);
         int wanted = Math.Max(1, teamBots / 4);
         defender = defenders < wanted && rng.NextDouble() < Math.Max(defendChance, 0.5);
+        if (me.Class.Id == PlayerClassId.Spy) { defender = false; redisguise = 0.5f; }
         if (me.Class.Id == PlayerClassId.Engineer) defender = true;   // engineers dig in and tend their sentry
         string[] spots = { "flagdoor", "hall", "door" };
         string side = me.Team == Team.Red ? "R_" : "B_";
@@ -100,6 +102,7 @@ public sealed class BotBrain
 
         UpdateTarget(dt);
         Vector3 moveDir = Navigate(dt, out bool wantMove);
+        if (me.Class.Id == PlayerClassId.Spy) SpyTick(dt, ref moveDir, ref wantMove);
 
         // Aim: at the target if we have one, otherwise where we're walking.
         float desiredYaw = me.Yaw, desiredPitch = 0f;
@@ -159,7 +162,7 @@ public sealed class BotBrain
             bool inRange = weapon.Mode switch
             {
                 FireMode.Flame => distToTarget < weapon.Range,
-                FireMode.Melee or FireMode.Heal or FireMode.Wrench => distToTarget < weapon.Range + 24,
+                FireMode.Melee or FireMode.Heal or FireMode.Wrench or FireMode.Backstab => distToTarget < weapon.Range + 24,
                 FireMode.Rocket or FireMode.Grenade or FireMode.Pipe => distToTarget < 1600,
                 _ => distToTarget < 2400,
             };
@@ -196,6 +199,35 @@ public sealed class BotBrain
         if (me.Class.Id == PlayerClassId.Engineer) EngineerTick(dt, wantMove, engaging, ref input);
         UpdateStuck(dt, wantMove && !holdingStill, ref input);
         me.Input = input;
+    }
+
+    /// <summary>Spies disguise as the enemy, then close in on whatever they can stab or sabotage.</summary>
+    void SpyTick(float dt, ref Vector3 moveDir, ref bool wantMove)
+    {
+        if (!me.DisguiseTeam.HasValue)
+        {
+            redisguise -= dt;
+            if (redisguise <= 0)
+            {
+                int cls;
+                do cls = rng.Next(Classes.All.Length); while (cls == (int)PlayerClassId.Spy);
+                game.StartDisguise(me, me.Team.Opposite(), (PlayerClassId)cls);
+                redisguise = 3f;
+            }
+        }
+        else
+        {
+            redisguise = 3f;
+        }
+
+        if (!HasTarget) return;
+        var to = TargetCenter - me.Position;
+        to.Y = 0;
+        float flat = to.Length();
+        if (flat > 170f) return;
+        if (flat < 40f) { wantMove = false; return; }   // close enough: stand and stab
+        moveDir = to / flat;
+        wantMove = true;
     }
 
     /// <summary>Build a sentry at the post, then keep upgrading and repairing it with the wrench.</summary>
@@ -266,21 +298,29 @@ public sealed class BotBrain
 
         Player? best = null;
         Sentry? bestSentry = null;
-        float bestD = me.Class.Id == PlayerClassId.Sniper ? 2500f : 1200f;
+        float playerRange = me.Class.Id == PlayerClassId.Sniper ? 2500f : 1200f;
+        float sentryRange = playerRange;
+        if (me.Class.Id == PlayerClassId.Spy && me.DisguiseTeam.HasValue)
+        {
+            // A disguised spy stays quiet and only goes for knife kills and sabotage.
+            playerRange = 100f;
+            sentryRange = 170f;
+        }
+        float bestD = float.MaxValue;
         foreach (var q in game.Players)
         {
-            if (!q.Alive || q.Team == me.Team) continue;
+            if (!q.IsTargetableBy(me.Team)) continue;
             float d = Vector3.Distance(me.Eye, q.Center);
-            if (d >= bestD) continue;
+            if (d >= playerRange || d >= bestD) continue;
             if (!game.World.LineOfSight(me.Eye, q.Center)) continue;
             best = q;
             bestD = d;
         }
         foreach (var s in game.Sentries)
         {
-            if (s.Dead || s.Team == me.Team) continue;
+            if (s.Dead || s.Team == me.Team || s.Sabotaged) continue;
             float d = Vector3.Distance(me.Eye, s.Hull.Center);
-            if (d >= bestD) continue;
+            if (d >= sentryRange || d >= bestD) continue;
             if (!game.World.LineOfSight(me.Eye, s.Hull.Center)) continue;
             bestSentry = s;
             best = null;
@@ -312,6 +352,9 @@ public sealed class BotBrain
                 break;
             case PlayerClassId.Demoman:
                 if (dist < 150) want = 0;
+                break;
+            case PlayerClassId.Spy:
+                if (dist < 120 || targetSentry != null) want = 0;   // knife for backstabs and sabotage
                 break;
         }
 

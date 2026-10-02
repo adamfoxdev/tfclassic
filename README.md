@@ -1,7 +1,7 @@
 # TF Classic (C#)
 
 A Team Fortress Classic–style capture-the-flag game in C# / .NET 8, with **one map** (`2fort_lite`),
-eight classes and bots to play against. Single player; no networking.
+all nine classes and bots to play against. Single player; no networking.
 
 ## Run it
 
@@ -26,6 +26,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Right mouse | Demoman: detonate pipebombs. Engineer: build a sentry (again to demolish it) |
 | `1` `2` `3` / wheel | switch weapon |
 | `Tab` | scoreboard |
+| `F` / `G` | Spy: cycle disguise as an enemy class / feign death |
 | `M` | class menu (applies on respawn, or instantly in your own resupply room) |
 | `Esc` | quit |
 
@@ -38,6 +39,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Numpad `0` | fire (hold; sniper charges while held) |
 | Numpad `Enter` or `.` | alt-fire (detonate pipebombs, build/demolish sentry) |
 | Numpad `+` / `-` | next / previous weapon |
+| Numpad `*` / `/` | Spy: disguise / feign death |
 | Numpad `1`-`8` | choose a class in the menu |
 
 ### Rules
@@ -50,7 +52,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 ### Classes
 
 Scout, Soldier (rocket jumping works), Demoman (grenade launcher + sticky pipebombs), HWGuy, Sniper (charged
-shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning), Engineer (sentry gun).
+shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning), Engineer (sentry gun), Spy (disguise, backstab, sabotage).
 
 **Engineer / sentry gun:** right-click builds a sentry about 56 units in front of you for 130 metal (it takes 3 s to
 come online). Hit your own sentry with the wrench to upgrade it (100 metal per level, up to level 3 which adds
@@ -58,7 +60,15 @@ rockets) or, once maxed, to repair and reload it (10 metal per swing). Sentries 
 sight, and can be shot, burned, blown up or clubbed down; the owner is credited with their kills. One sentry per
 engineer; resupply lockers only top metal up by 20 per visit. Bot engineers build one at their post and tend it.
 
-**Not yet implemented:** Spy (disguise/backstab), dispenser and teleporters, concussion grenades, detpacks, infection.
+**Spy:** `F` starts a 2 s disguise as the next enemy class. Once it completes, enemy sentries and bots won't target you
+and enemy players see you as one of their own (class colour, name tag, radar dot). Attacking or taking damage blows it.
+The knife kills in one hit from behind (40 damage from the front) and, used on an enemy sentry, **sabotages** it: the
+sentry is disabled and self-destructs after 4 s unless its engineer hits it with the wrench. The tranquilizer gun slows
+targets for 3 s. `G` feigns death for up to 10 s (fake kill-feed message and corpse; you can't move or shoot, and
+sentries and bots ignore you; not allowed while carrying the flag). Bot spies disguise on spawn, stab anything that
+comes close and sabotage sentries they walk past.
+
+**Not yet implemented:** dispenser and teleporters, concussion/hand grenades, detpacks, infection.
 
 ## The map
 

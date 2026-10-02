@@ -40,8 +40,16 @@ sealed class WorldRenderer
 
     void DrawPlayer(Player p, Player viewer)
     {
-        var team = Palette.Team(p.Team);
-        var cls = Palette.ClassColor(p.Class.Id);
+        if (p.Feigning)
+        {
+            DrawCorpse(p);
+            return;
+        }
+
+        // Enemies of a fully disguised spy see the disguise instead of the spy.
+        bool fooled = p.IsDisguised && viewer.Team != p.Team;
+        var team = Palette.Team(fooled ? p.DisguiseTeam!.Value : p.Team);
+        var cls = Palette.ClassColor(fooled ? p.DisguiseClass : p.Class.Id);
         float blink = p.SpawnProtect > 0 && ((int)(game.Time * 10) % 2 == 0) ? 0.5f : 1f;
 
         Rlgl.PushMatrix();
@@ -94,6 +102,13 @@ sealed class WorldRenderer
             }
             Rlgl.PopMatrix();
 
+            if (s.Sabotaged)
+            {
+                float flicker = 0.5f + 0.5f * MathF.Sin(game.Time * 25f);
+                Raylib.DrawSphere(s.Position + new Vector3(0, 50 + flicker * 6, 0), 7f + flicker * 4f, new Color(70, 70, 70, 190));
+                Raylib.DrawSphere(s.Position + new Vector3(0, 38, 0), 5f, new Color(255, (int)(120 + 100 * flicker), 40, 220));
+            }
+
             // Health bar above the turret, visible to everyone.
             float frac = Math.Clamp(s.Health / s.MaxHealth, 0f, 1f);
             var barPos = s.Position + new Vector3(0, 52, 0);
@@ -101,6 +116,18 @@ sealed class WorldRenderer
             Raylib.DrawCubeV(barPos + new Vector3(-13 * (1 - frac), 0, 0), new Vector3(26 * frac, 3, 3),
                 frac > 0.5f ? new Color(90, 230, 90, 255) : new Color(240, 90, 70, 255));
         }
+    }
+
+    void DrawCorpse(Player p)
+    {
+        var team = Palette.Team(p.Team);
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(p.Position.X, p.Position.Y, p.Position.Z);
+        Rlgl.Rotatef(p.Yaw * (180f / MathF.PI), 0, 1, 0);
+        Draw3D.Box(new Vector3(-14, 0, -30), new Vector3(14, 12, 8), team, true);                                    // torso
+        Draw3D.Box(new Vector3(-8, 0, 8), new Vector3(8, 14, 22), new Color(222, 184, 150, 255), true);              // head
+        Draw3D.Box(new Vector3(-11, 0, -52), new Vector3(11, 10, -30), new Color(60, 60, 70, 255), true);            // legs
+        Rlgl.PopMatrix();
     }
 
     void DrawFlags(float time)

@@ -33,6 +33,8 @@ sealed class Hud
         DrawKillFeed(w);
         DrawFlagStatus(me, w, h);
         DrawEngineer(me, w, h);
+        DrawSpy(me, w, h);
+        if (me.Class.Id != PlayerClassId.Spy && me.SlowTime > 0) Text("SLOWED", w / 2 - 40, h / 2 + 100, 22, new Color(150, 200, 255, 255));
 
         if (!me.Alive)
         {
@@ -127,6 +129,26 @@ sealed class Hud
                 w / 2, h / 2 + 120, 24, new Color(255, 230, 90, 255));
     }
 
+    void DrawSpy(Player me, int w, int h)
+    {
+        if (me.Class.Id != PlayerClassId.Spy) return;
+
+        string disguise = me.Feigning
+            ? $"FEIGNING DEATH ({MathF.Ceiling(me.FeignTimer)}s)  -  G to get up"
+            : !me.DisguiseTeam.HasValue
+                ? "Not disguised  (F: disguise as an enemy class)"
+                : me.IsDisguised
+                    ? $"Disguised as {me.DisguiseTeam} {Classes.Get(me.DisguiseClass).Name}  (F: change)"
+                    : $"Disguising as {me.DisguiseTeam} {Classes.Get(me.DisguiseClass).Name}... {MathF.Ceiling(me.DisguiseTimer)}s";
+        var c = me.IsDisguised ? new Color(150, 255, 150, 255) : me.Feigning ? new Color(255, 200, 100, 255) : Color.White;
+        Text(disguise, 24, h - 150, 18, c);
+        Text("knife: backstab from behind / sabotage sentries   G: feign death   tranq gun slows", 24, h - 172, 13, Color.LightGray);
+        if (me.SlowTime > 0) Text("SLOWED", w / 2 - 40, h / 2 + 100, 22, new Color(150, 200, 255, 255));
+
+        if (me.NoticeTimer > 0)
+            TextCentered(me.Notice, w / 2, h / 2 + 70, 22, new Color(255, 230, 120, 255));
+    }
+
     void DrawEngineer(Player me, int w, int h)
     {
         if (me.Class.Id != PlayerClassId.Engineer) return;
@@ -163,7 +185,8 @@ sealed class Hud
     {
         foreach (var p in game.Players)
         {
-            if (p == me || !p.Alive || p.Team != me.Team) continue;
+            bool friendly = p.Team == me.Team || p.IsDisguisedAs(me.Team);
+            if (p == me || !p.Alive || !friendly || p.Feigning) continue;
             if (!game.World.LineOfSight(me.Eye, p.Eye)) continue;
             var pos = p.Position + new Vector3(0, 84, 0);
             var toCam = pos - cam.Position;
@@ -171,7 +194,7 @@ sealed class Hud
             var s = Raylib.GetWorldToScreen(pos, cam);
             string label = p.CarryingFlag != null ? $"{p.Name} [FLAG]" : p.Name;
             int tw = Raylib.MeasureText(label, 14);
-            Text(label, (int)s.X - tw / 2, (int)s.Y, 14, Palette.Team(p.Team));
+            Text(label, (int)s.X - tw / 2, (int)s.Y, 14, Palette.Team(me.Team));
         }
     }
 
@@ -202,9 +225,10 @@ sealed class Hud
         foreach (var p in game.Players)
         {
             if (!p.Alive) continue;
-            if (p.Team != me.Team && !game.World.LineOfSight(me.Eye, p.Eye)) continue;
+            bool friendly = p.Team == me.Team || p.IsDisguisedAs(me.Team);
+            if (!friendly && (p.Feigning || !game.World.LineOfSight(me.Eye, p.Eye))) continue;
             var m = Map(p.Position);
-            Raylib.DrawCircle((int)m.X, (int)m.Y, p == me ? 3.5f : 2.5f, p == me ? Color.White : Palette.Team(p.Team));
+            Raylib.DrawCircle((int)m.X, (int)m.Y, p == me ? 3.5f : 2.5f, p == me ? Color.White : Palette.Team(friendly ? me.Team : p.Team));
         }
     }
 
@@ -257,11 +281,11 @@ sealed class Hud
             y += 36;
         }
 
-        TextCentered(firstJoin ? "Press 1-8 to choose a class, ENTER to join" : "Press 1-8 to choose, ENTER to confirm (applies on respawn or in your resupply room)",
+        TextCentered(firstJoin ? "Press 1-9 to choose a class, ENTER to join" : "Press 1-9 to choose, ENTER to confirm (applies on respawn or in your resupply room)",
             w / 2, y + 20, 20, Color.White);
-        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: build sentry  -  1/2/3 weapons  -  TAB scores  -  M class menu  -  ESC quit",
+        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: build sentry  -  1/2/3 weapons  -  F/G spy disguise/feign  -  TAB scores  -  M menu  -  ESC quit",
             w / 2, y + 56, 16, Color.LightGray);
-        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  Numpad Enter or . alt-fire  -  Numpad +/- weapon",
+        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  Enter or . alt-fire  -  +/- weapon  -  * disguise  -  / feign",
             w / 2, y + 80, 16, new Color(255, 230, 140, 255));
     }
 }

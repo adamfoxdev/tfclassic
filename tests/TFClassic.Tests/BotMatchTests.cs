@@ -8,12 +8,12 @@ namespace TFClassic.Tests;
 
 public class BotMatchTests(ITestOutputHelper output)
 {
-    /// <summary>Bots with classes drawn from a fixed pool (Engineers optional, since sentries change the balance a lot).</summary>
+    /// <summary>Bots with classes drawn from a fixed pool (Engineer/Spy optional, since sentries and disguises change the balance a lot).</summary>
     static Game BotGame(int seed, int perTeam, bool engineers = false)
     {
         var g = NewGame(seed);
         var rng = new Random(seed * 31);
-        int pool = engineers ? Classes.All.Length : Classes.All.Length - 1;   // Engineer is last
+        int pool = engineers ? Classes.All.Length : (int)PlayerClassId.Engineer;   // Engineer and Spy come last
         for (int i = 0; i < perTeam; i++)
         {
             g.AddBot(Team.Red, (PlayerClassId)rng.Next(pool));
@@ -88,6 +88,29 @@ public class BotMatchTests(ITestOutputHelper output)
         }
         output.WriteLine($"sentries built: {seen.Count}, resets: {g.BotStuckResets}");
         Assert.True(seen.Count >= 2, "both engineers should have built at least one sentry");
+        Assert.True(g.BotStuckResets <= 2);
+    }
+
+    [Fact]
+    public void MatchesWithSpiesDisguiseAndStayStable()
+    {
+        var g = NewGame(11);
+        var spies = new[] { g.AddBot(Team.Red, PlayerClassId.Spy), g.AddBot(Team.Blue, PlayerClassId.Spy) };
+        for (int i = 0; i < 4; i++)
+        {
+            g.AddBot(Team.Red, PlayerClassId.Soldier);
+            g.AddBot(Team.Blue, PlayerClassId.HeavyWeapons);
+        }
+        bool sawDisguise = false;
+        for (int i = 0; i < 60 * 300; i++)
+        {
+            g.Tick(Dt);
+            sawDisguise |= spies.Any(s => s.IsDisguised);
+            foreach (var p in g.Players)
+                Assert.False(float.IsNaN(p.Position.X + p.Position.Y + p.Position.Z), "NaN position");
+        }
+        output.WriteLine($"spy frags: {spies[0].Frags}/{spies[1].Frags}, resets: {g.BotStuckResets}");
+        Assert.True(sawDisguise, "spy bots should disguise");
         Assert.True(g.BotStuckResets <= 2);
     }
 }

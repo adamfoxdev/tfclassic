@@ -13,10 +13,10 @@ public enum WeaponId
 {
     Crowbar, Medikit, Shotgun, Nailgun, SuperNailgun,
     RocketLauncher, GrenadeLauncher, PipebombLauncher,
-    AssaultCannon, SniperRifle, AutoRifle, Flamethrower, Wrench,
+    AssaultCannon, SniperRifle, AutoRifle, Flamethrower, Wrench, Knife, Tranquilizer,
 }
 
-public enum FireMode { Melee, Heal, Wrench, Hitscan, Rocket, Grenade, Pipe, Flame, SniperCharge }
+public enum FireMode { Melee, Heal, Wrench, Backstab, Tranq, Hitscan, Rocket, Grenade, Pipe, Flame, SniperCharge }
 
 public sealed record WeaponDef(
     WeaponId Id, string Name, FireMode Mode, AmmoType Ammo, int AmmoPerShot,
@@ -30,6 +30,8 @@ public static class Weapons
         new WeaponDef(WeaponId.Crowbar, "Crowbar", FireMode.Melee, AmmoType.None, 0, 0.4f, 25, 1, 0, 70),
         new WeaponDef(WeaponId.Medikit, "Medikit", FireMode.Heal, AmmoType.None, 0, 0.4f, 20, 1, 0, 76),
         new WeaponDef(WeaponId.Wrench, "Wrench", FireMode.Wrench, AmmoType.None, 0, 0.45f, 22, 1, 0, 76),
+        new WeaponDef(WeaponId.Knife, "Knife", FireMode.Backstab, AmmoType.None, 0, 0.8f, 40, 1, 0, 72),
+        new WeaponDef(WeaponId.Tranquilizer, "Tranquilizer", FireMode.Tranq, AmmoType.Nails, 1, 0.8f, 8, 1, 0.01f, 2500),
         new WeaponDef(WeaponId.Shotgun, "Shotgun", FireMode.Hitscan, AmmoType.Shells, 1, 0.55f, 4, 6, 0.06f, 3000),
         new WeaponDef(WeaponId.Nailgun, "Nailgun", FireMode.Hitscan, AmmoType.Nails, 1, 0.1f, 9, 1, 0.025f, 3000),
         new WeaponDef(WeaponId.SuperNailgun, "Super Nailgun", FireMode.Hitscan, AmmoType.Nails, 2, 0.1f, 14, 1, 0.03f, 3000),
@@ -45,7 +47,7 @@ public static class Weapons
     public static WeaponDef Get(WeaponId id) => Table[id];
 }
 
-public enum PlayerClassId { Scout, Soldier, Demoman, HeavyWeapons, Sniper, Medic, Pyro, Engineer }
+public enum PlayerClassId { Scout, Soldier, Demoman, HeavyWeapons, Sniper, Medic, Pyro, Engineer, Spy }
 
 public sealed record ClassDef(
     PlayerClassId Id, string Name, int MaxHealth, int MaxArmor, int StartArmor, float Speed,
@@ -74,6 +76,8 @@ public static class Classes
             new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.Flamethrower }, 2, new[] { 0, 40, 0, 0, 200 }),
         new(PlayerClassId.Engineer, "Engineer", 80, 50, 25, 300,
             new[] { WeaponId.Wrench, WeaponId.Shotgun, WeaponId.Nailgun }, 1, new[] { 0, 50, 100, 0, 0 }, MaxMetal: 200),
+        new(PlayerClassId.Spy, "Spy", 90, 100, 25, 300,
+            new[] { WeaponId.Knife, WeaponId.Shotgun, WeaponId.Tranquilizer }, 1, new[] { 0, 40, 60, 0, 0 }),
     };
 
     public static ClassDef Get(PlayerClassId id) => All[(int)id];
