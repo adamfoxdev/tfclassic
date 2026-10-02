@@ -29,6 +29,17 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | `M` | class menu (applies on respawn, or instantly in your own resupply room) |
 | `Esc` | quit |
 
+**No mouse?** Everything is playable from the keyboard:
+
+| Key | Action |
+| --- | --- |
+| Numpad `4` `6` / `8` `2` | turn left / right, look up / down (`5` re-centres the view) |
+| Arrow keys, or Numpad `7` `9` | move forward/back and strafe |
+| Numpad `0` | fire (hold; sniper charges while held) |
+| Numpad `Enter` or `.` | alt-fire (detonate pipebombs, build/demolish sentry) |
+| Numpad `+` / `-` | next / previous weapon |
+| Numpad `1`-`8` | choose a class in the menu |
+
 ### Rules
 
 * Grab the enemy flag from its stand and bring it to **your own flag stand**. Your flag must be at home to capture.

@@ -261,5 +261,7 @@ sealed class Hud
             w / 2, y + 20, 20, Color.White);
         TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: build sentry  -  1/2/3 weapons  -  TAB scores  -  M class menu  -  ESC quit",
             w / 2, y + 56, 16, Color.LightGray);
+        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  Numpad Enter or . alt-fire  -  Numpad +/- weapon",
+            w / 2, y + 80, 16, new Color(255, 230, 140, 255));
     }
 }
