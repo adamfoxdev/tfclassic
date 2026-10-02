@@ -37,6 +37,7 @@ sealed class WorldRenderer
         DrawFirePatches();
         DrawAreaEffects();
         DrawFlags(time);
+        DrawGrapples(viewer);
         DrawProjectiles();
         DrawEffects();
         DrawWater();
@@ -408,6 +409,19 @@ sealed class WorldRenderer
 
             if (f.Carrier == null)
                 Raylib.DrawCubeV(p + new Vector3(0, 220, 0), new Vector3(10, 440, 10), Palette.Shade(c, 1f, 60));
+        }
+    }
+
+    void DrawGrapples(Player viewer)
+    {
+        foreach (var p in game.Players)
+        {
+            if (!p.Alive || !p.Grappling) continue;
+            var hand = p == viewer ? p.Eye + p.Right * 10f + new Vector3(0, -9, 0) + p.Forward * 14f
+                                   : p.Position + new Vector3(0, 50, 0) + p.Right * 8f;
+            var rope = new Color(225, 205, 150, 255);
+            Raylib.DrawCylinderEx(hand, p.GrappleAnchor, 0.7f, 0.7f, 5, rope);
+            Raylib.DrawSphere(p.GrappleAnchor, 3.5f, Palette.Team(p.Team));
         }
     }
 

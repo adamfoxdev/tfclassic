@@ -337,6 +337,7 @@ sealed class Client
             input.Grenade1 = Raylib.IsKeyDown(KeyboardKey.Q) || Raylib.IsKeyDown(KeyboardKey.Kp1);
             input.Grenade2 = Raylib.IsKeyDown(KeyboardKey.E) || Raylib.IsKeyDown(KeyboardKey.Kp3);
             input.Jump = Raylib.IsKeyDown(KeyboardKey.Space);
+            input.Grapple = Raylib.IsKeyDown(KeyboardKey.X) || Raylib.IsMouseButtonDown(MouseButton.Middle);
             input.Fire = Raylib.IsMouseButtonDown(MouseButton.Left) || Raylib.IsKeyDown(KeyboardKey.Kp0);
             bool kpEnter = Raylib.IsKeyDown(KeyboardKey.KpEnter);
             if (!kpEnter) swallowKpEnter = false;

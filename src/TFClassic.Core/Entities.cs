@@ -17,6 +17,7 @@ public struct PlayerInput
     public bool DetpackFuseNext; // edge: cycle the detpack timer 5 / 20 / 50 s
     public bool BuildTeleporter; // edge: build entrance, then exit, then demolish both (Engineer)
     public bool AltFire;    // held
+    public bool Grapple;    // held: fire the grappling hook, and keep reeling in while held
     public float Yaw;       // radians; 0 faces +Z, increasing turns left
     public float Pitch;     // radians; positive looks up
     public int SelectSlot;  // -1 = no change, 0..2 = switch weapon
@@ -37,6 +38,12 @@ public sealed class Player
     public float Yaw, Pitch;
     public bool OnGround;
     public bool JumpHeld;
+
+    // Grappling hook
+    public bool Grappling;
+    public Vector3 GrappleAnchor;
+    public bool GrappleHeld;        // previous tick's button state, for edge detection
+    public float GrappleCooldown;
 
     public float Health, Armor;
     public int[] Ammo = new int[5];

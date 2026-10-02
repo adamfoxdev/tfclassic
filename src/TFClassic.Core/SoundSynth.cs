@@ -135,6 +135,10 @@ public static class SoundSynth
                 s.Len(0.4f); s.Tone(0, 0.12f, 880, 880, 0.4f, 10, Wave.Triangle); s.Tone(0.1f, 0.2f, 1320, 1320, 0.4f, 8, Wave.Triangle); break;
             case SoundId.Heal:
                 s.Len(0.2f); s.Tone(0, 0.15f, 1040, 1040, 0.3f, 14, Wave.Triangle); break;
+            case SoundId.GrappleFire:
+                s.Len(0.25f); s.Noise(0, 0.12f, 0.5f, 0.3f, 14); s.Tone(0, 0.2f, 1400, 500, 0.3f, 10); break;
+            case SoundId.GrappleHit:
+                s.Len(0.2f); s.Tone(0, 0.12f, 220, 90, 0.7f, 22); s.Noise(0, 0.04f, 0.6f, 0.5f, 60); s.Tone(0.02f, 0.15f, 1800, 1800, 0.15f, 25, Wave.Triangle); break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(id), id, "no recipe for this sound");
         }

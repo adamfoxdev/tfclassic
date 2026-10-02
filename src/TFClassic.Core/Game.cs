@@ -173,10 +173,62 @@ public sealed class Game
         Events.RemoveAll(e => Time - e.Time > 8f);
     }
 
+    public const float HumanRespawnDelay = 5f, BotRespawnDelay = 10f;
+
+    public const float GrappleRange = 1800f, GrappleAccel = 2600f, GrappleMaxSpeed = 900f, GrappleCooldownTime = 0.4f;
+
+    /// <summary>Grappling hook: a press fires at whatever the crosshair touches; while held, the player is reeled toward it.</summary>
+    void UpdateGrapple(Player p, float dt)
+    {
+        p.GrappleCooldown = MathF.Max(0, p.GrappleCooldown - dt);
+        bool held = p.Input.Grapple && !MatchOver && !p.Feigning;
+        bool pressed = held && !p.GrappleHeld;
+        p.GrappleHeld = held;
+
+        if (!held) { Release(p); return; }
+
+        if (pressed && !p.Grappling && p.GrappleCooldown <= 0)
+        {
+            p.GrappleCooldown = GrappleCooldownTime;
+            Emit(SoundId.GrappleFire, p.Eye, 0.6f, 1200f, p);
+            var dir = p.Forward;
+            if (World.Raycast(p.Eye, p.Eye + dir * GrappleRange, out float t, out _))
+            {
+                p.GrappleAnchor = p.Eye + dir * (GrappleRange * t);
+                p.Grappling = true;
+                Emit(SoundId.GrappleHit, p.GrappleAnchor, 0.7f, 1500f, p);
+            }
+            return;
+        }
+        if (!p.Grappling) return;
+
+        var to = p.GrappleAnchor - p.Eye;
+        float dist = to.Length();
+        // Let go on arrival, or if the rope has been cut by geometry in the way.
+        if (dist < 56f || World.Raycast(p.Eye, p.GrappleAnchor - to / MathF.Max(dist, 1f) * 4f, out _, out _))
+        {
+            Release(p);
+            return;
+        }
+        var pull = to / dist;
+        p.Velocity += pull * GrappleAccel * dt;
+        p.Velocity.Y += Movement.Gravity * 0.85f * dt;             // the hook takes most of your weight
+        float along = Vector3.Dot(p.Velocity, pull);
+        if (along > GrappleMaxSpeed) p.Velocity -= pull * (along - GrappleMaxSpeed);
+        p.OnGround = false;
+        if (p.Velocity.Y < 40f && pull.Y > 0.2f) p.Position.Y += 1f;   // peel the feet off the floor so friction doesn't fight the pull
+    }
+
+    static void Release(Player p)
+    {
+        p.Grappling = false;
+    }
+
     void UpdatePlayer(Player p, float dt)
     {
         if (!p.Alive)
         {
+            p.Grappling = false;
             p.RespawnTimer -= dt;
             if (p.RespawnTimer <= 0 && !MatchOver) Respawn(p);
             return;
@@ -210,6 +262,8 @@ public sealed class Game
         else if (p.Input.Fire && p.Weapon.Id == WeaponId.AssaultCannon) speedScale = 0.45f;
         if (p.SlowTime > 0) speedScale *= 0.45f;
         if (MatchOver || p.Feigning) { p.Input.Forward = 0; p.Input.Right = 0; p.Input.Fire = false; p.Input.Jump = false; }
+
+        UpdateGrapple(p, dt);
 
         bool wasOnGround = p.OnGround;
         float fallSpeed = p.Velocity.Y;
@@ -1797,7 +1851,7 @@ public sealed class Game
         victim.Alive = false;
         Emit(SoundId.Death, victim.Center, 1f, 1600f, victim);
         victim.Deaths++;
-        victim.RespawnTimer = victim.IsBot ? 4f : 5f;
+        victim.RespawnTimer = victim.IsBot ? BotRespawnDelay : HumanRespawnDelay;
         victim.BurnTime = 0;
         victim.SniperCharge = 0;
         victim.Feigning = false;

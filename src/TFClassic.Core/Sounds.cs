@@ -17,6 +17,8 @@ public enum SoundId
     FlagTake, FlagCapture, FlagReturn, FlagDrop, MatchWin,
     // engineer, spy, medic
     BuildStart, Upgrade, Teleport, DispenserUse, Disguise, Feign, Infected, Cure, Heal,
+    // grappling hook
+    GrappleFire, GrappleHit,
 }
 
 /// <summary>A sound that happened in the world at a place. SourcePlayerId lets the client single out its own player.</summary>

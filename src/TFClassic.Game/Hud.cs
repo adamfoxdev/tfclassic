@@ -37,6 +37,7 @@ sealed class Hud
         DrawEngineer(me, w, h);
         DrawSpy(me, w, h);
         DrawDemoman(me, w, h);
+        if (me.Grappling) Text("GRAPPLING", w / 2 - 50, h / 2 + 130, 20, new Color(255, 230, 140, 255));
         if (me.Class.Id != PlayerClassId.Spy && me.SlowTime > 0) Text("SLOWED", w / 2 - 40, h / 2 + 100, 22, new Color(150, 200, 255, 255));
 
         if (!me.Alive)
@@ -398,7 +399,7 @@ sealed class Hud
 
         TextCentered(firstJoin ? "Press 1-9 to choose a class, ENTER to join" : "Press 1-9 to choose, ENTER to confirm (applies on respawn or in your resupply room)",
             w / 2, y + 20, 20, Color.White);
-        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: sentry / B dispenser / T teleporters  -  1/2/3 weapons  -  Q/E grenades (hold to cook)  -  V/C demoman detpack  -  F/G spy  -  TAB scores  -  M menu (N: change map)  -  F8 sound  -  ESC quit",
+        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: sentry / B dispenser / T teleporters  -  1/2/3 weapons  -  Q/E grenades (hold to cook)  -  V/C demoman detpack  -  F/G spy  -  X / middle mouse grapple  -  TAB scores  -  M menu (N: change map)  -  F8 sound  -  ESC quit",
             w / 2, y + 56, 16, Color.LightGray);
         TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  1/3 grenades  -  Enter or . alt-fire  -  +/- weapon  -  * disguise/dispenser/detpack  -  / feign/teleporter/fuse",
             w / 2, y + 80, 16, new Color(255, 230, 140, 255));
