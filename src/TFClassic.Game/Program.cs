@@ -13,7 +13,7 @@ static class Program
         int perTeam = 6, seed = Environment.TickCount, width = 1280, height = 720;
         string? screenshot = null;
         float[]? at = null;
-        bool menu = false, sentry = false;
+        bool menu = false, sentry = false, tele = false;
         float warmup = 25f;
         var team = Team.Blue;
         var cls = PlayerClassId.Soldier;
@@ -30,6 +30,7 @@ static class Program
                 case "--at": at = args[++i].Split(',').Select(float.Parse).ToArray(); break;
                 case "--menu": menu = true; break;
                 case "--sentry": sentry = true; break;
+                case "--tele": tele = true; break;
                 case "--warmup": warmup = float.Parse(args[++i]); break;
                 case "--team": team = Enum.Parse<Team>(args[++i], true); break;
                 case "--class": cls = Enum.Parse<PlayerClassId>(args[++i], true); break;
@@ -57,7 +58,7 @@ static class Program
 
         var client = new Client(game, human, screenshot != null && !menu);
         if (screenshot != null)
-            return client.RunScreenshot(screenshot, warmup, at, sentry);
+            return client.RunScreenshot(screenshot, warmup, at, sentry, tele);
 
         client.Run();
         Raylib.CloseWindow();

@@ -11,6 +11,7 @@ public struct PlayerInput
     public bool DisguiseNext; // edge: start disguising as the next enemy class (Spy)
     public bool Feign;        // edge: toggle feigning death (Spy)
     public bool BuildDispenser; // edge: build or demolish a dispenser (Engineer)
+    public bool BuildTeleporter; // edge: build entrance, then exit, then demolish both (Engineer)
     public bool AltFire;    // held
     public float Yaw;       // radians; 0 faces +Z, increasing turns left
     public float Pitch;     // radians; positive looks up
@@ -57,6 +58,7 @@ public sealed class Player
     public bool Feigning;
     public float FeignTimer, FeignCooldown;
     public float SlowTime;
+    public int TeleportCount;
 
     /// <summary>Fully disguised (the 2 s transition is over).</summary>
     public bool IsDisguised => DisguiseTeam.HasValue && DisguiseTimer <= 0f;
@@ -128,8 +130,33 @@ public sealed class Effect
 
 public sealed record GameEvent(float Time, string Text, Team? Team);
 
+/// <summary>Common state for everything an Engineer builds: it can be shot, burned, blown up, sabotaged and wrenched.</summary>
+public abstract class Structure
+{
+    public Player Owner = null!;
+    public Team Team;
+    public Vector3 Position;   // feet
+    public float Yaw;
+    public float Health;
+    public float BuildTimer = 3f;
+    public float SabotageTimer;
+    public Player? Saboteur;
+    public bool Dead;
+
+    /// <summary>Half extents of the box that bullets, melee and explosions test against.</summary>
+    protected abstract Vector3 Half { get; }
+    /// <summary>Lower-case noun used in kill-feed and HUD text ("sentry", "dispenser", ...).</summary>
+    public abstract string Label { get; }
+
+    public Aabb Hull => Aabb.FromCenter(Position + new Vector3(0, Half.Y, 0), Half);
+    public bool Building => BuildTimer > 0;
+    public bool Sabotaged => SabotageTimer > 0;
+    /// <summary>Standing, finished and not sabotaged.</summary>
+    public bool Active => !Dead && !Building && !Sabotaged;
+}
+
 /// <summary>An engineer-built automatic turret. Levels 1-3; level 3 also fires rockets.</summary>
-public sealed class Sentry
+public sealed class Sentry : Structure
 {
     public const int BuildCost = 130;
     public const int UpgradeCost = 100;
@@ -140,22 +167,16 @@ public sealed class Sentry
     static readonly float[] RangeByLevel = { 900f, 1000f, 1100f };
     static readonly float[] TurnByLevel = { 3f, 4.5f, 6f };
 
-    public Player Owner = null!;
-    public Team Team;
-    public Vector3 Position;   // feet
-    public float Yaw;
     public int Level = 1;
-    public float Health = 150;
-    public float SabotageTimer;
-    public Player? Saboteur;
     public int Ammo = 100, Rockets;
-    public float BuildTimer = 3f;
     public float FireCooldown, RocketCooldown, RetargetTimer;
     public Player? Target;
-    public bool Dead;
+
+    public Sentry() => Health = 150;
 
     public static readonly Vector3 HullHalf = new(14, 20, 14);
-    public Aabb Hull => Aabb.FromCenter(Position + new Vector3(0, HullHalf.Y, 0), HullHalf);
+    protected override Vector3 Half => HullHalf;
+    public override string Label => "sentry";
     public Vector3 Muzzle => Position + new Vector3(0, 34, 0);
 
     public int MaxHealth => HealthByLevel[Level - 1];
@@ -163,32 +184,44 @@ public sealed class Sentry
     public float Cooldown => CooldownByLevel[Level - 1];
     public float Range => RangeByLevel[Level - 1];
     public float TurnRate => TurnByLevel[Level - 1];
-    public bool Building => BuildTimer > 0;
-    public bool Sabotaged => SabotageTimer > 0;
 }
 
 /// <summary>An engineer-built supply station: periodically restocks nearby teammates from a finite store.</summary>
-public sealed class Dispenser
+public sealed class Dispenser : Structure
 {
     public const int BuildCost = 100;
     public const int MaxStore = 400;
     public const int MaxHealth = 150;
     public const float Reach = 130f;
 
-    public Player Owner = null!;
-    public Team Team;
-    public Vector3 Position;   // feet
-    public float Yaw;
-    public float Health = MaxHealth;
     public int Store = MaxStore;
-    public float BuildTimer = 3f;
     public float UseTimer;
-    public float SabotageTimer;
-    public Player? Saboteur;
-    public bool Dead;
+
+    public Dispenser() => Health = MaxHealth;
 
     public static readonly Vector3 HullHalf = new(14, 28, 14);
-    public Aabb Hull => Aabb.FromCenter(Position + new Vector3(0, HullHalf.Y, 0), HullHalf);
-    public bool Building => BuildTimer > 0;
-    public bool Sabotaged => SabotageTimer > 0;
+    protected override Vector3 Half => HullHalf;
+    public override string Label => "dispenser";
+}
+
+public enum TeleporterRole { Entrance, Exit }
+
+/// <summary>
+/// One end of an engineer's teleporter pair. Teammates who step onto a working Entrance appear on the
+/// owner's Exit; enemies standing on the Exit when someone arrives are telefragged.
+/// </summary>
+public sealed class Teleporter : Structure
+{
+    public const int BuildCost = 100;
+    public const int MaxHealth = 100;
+    public const float Cooldown = 3f;
+
+    public TeleporterRole Role;
+    public float CooldownTimer;
+
+    public Teleporter() => Health = MaxHealth;
+
+    public static readonly Vector3 HullHalf = new(24, 5, 24);
+    protected override Vector3 Half => HullHalf;
+    public override string Label => Role == TeleporterRole.Entrance ? "teleporter entrance" : "teleporter exit";
 }

@@ -28,6 +28,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | `Tab` | scoreboard |
 | `F` / `G` | Spy: cycle disguise as an enemy class / feign death |
 | `B` | Engineer: build a dispenser (again to demolish it) |
+| `T` | Engineer: build teleporter entrance, then exit, then demolish the pair |
 | `M` | class menu (applies on respawn, or instantly in your own resupply room) |
 | `Esc` | quit |
 
@@ -40,7 +41,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Numpad `0` | fire (hold; sniper charges while held) |
 | Numpad `Enter` or `.` | alt-fire (detonate pipebombs, build/demolish sentry) |
 | Numpad `+` / `-` | next / previous weapon |
-| Numpad `*` / `/` | Spy: disguise / feign death. Engineer: `*` builds a dispenser |
+| Numpad `*` / `/` | Spy: disguise / feign death. Engineer: `*` builds a dispenser, `/` teleporters |
 | Numpad `1`-`8` | choose a class in the menu |
 
 ### Rules
@@ -53,7 +54,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 ### Classes
 
 Scout, Soldier (rocket jumping works), Demoman (grenade launcher + sticky pipebombs), HWGuy, Sniper (charged
-shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning), Engineer (sentry gun, dispenser), Spy (disguise, backstab, sabotage).
+shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning), Engineer (sentry gun, dispenser, teleporters), Spy (disguise, backstab, sabotage).
 
 **Engineer / sentry gun:** right-click builds a sentry about 56 units in front of you for 130 metal (it takes 3 s to
 come online). Hit your own sentry with the wrench to upgrade it (100 metal per level, up to level 3 which adds
@@ -69,7 +70,18 @@ targets for 3 s. `G` feigns death for up to 10 s (fake kill-feed message and cor
 sentries and bots ignore you; not allowed while carrying the flag). Bot spies disguise on spawn, stab anything that
 comes close and sabotage sentries they walk past.
 
-**Not yet implemented:** teleporters, concussion/hand grenades, detpacks, infection. (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
+**Teleporters:** press `T` to build a teleporter *entrance* (100 metal), walk somewhere else and press `T` again to
+build the linked *exit* (100 metal); with both standing, `T` demolishes the pair for 80 metal back. Teammates who step
+onto a working entrance appear on your exit (3 s cooldown, flag carriers included); the exit is one-way, and
+**enemies standing on the exit when someone arrives are telefragged**. Pads can be shot, burned or blown up,
+sabotaged by spies, and repaired with the wrench (10 metal per 40 HP). A cyan beam marks the entrance and an orange
+one the exit while the pair is ready. Bot engineers build a pair once their sentry is level 2 and they have the
+metal (entrance outside their spawn building, exit at the front of their half), and attacking bots hop on it.
+
+All engineer structures share one code path (`Structure`): shooting, burning, explosions (rockets and grenades
+detonate on them), melee, spy sabotage and wrench repair behave identically for sentries, dispensers and teleporters.
+
+**Not yet implemented:** concussion/hand grenades, detpacks, infection. (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
 
 ## The map
 

@@ -44,6 +44,9 @@ public sealed class BotBrain
     int buildFails;
     bool triedBuild;
     bool dispenserTried, dispenserStarted;
+    bool teleCommit, useTele;
+    float teleTimer;
+    int teleCountBefore = -1, lastTeleportCount;
     float dispenserTimer;
     float yawOffset;
 
@@ -60,6 +63,8 @@ public sealed class BotBrain
         lastSpawnCount = me.SpawnCount;
         dispenserStarted = false;
         dispenserTried = false;
+        useTele = rng.NextDouble() < 0.7;
+        lastTeleportCount = me.TeleportCount;
         path.Clear();
         pathGoal = -1;
         target = null;
@@ -238,6 +243,7 @@ public sealed class BotBrain
     void EngineerTick(float dt, bool wantMove, bool engaging, ref PlayerInput input)
     {
         if (wantMove || engaging) return;
+        if (teleCommit && BuildTeleporter(dt, ref input)) return;
         var sentry = game.SentryOf(me);
 
         if (sentry == null)
@@ -295,7 +301,15 @@ public sealed class BotBrain
             || ((sentry.Health < sentry.MaxHealth || sentry.Ammo < sentry.MaxAmmo) && me.Metal >= 10);
         bool dispenserNeeds = dispenser != null && !dispenser.Building
             && (dispenser.Health < Dispenser.MaxHealth || dispenser.Store < Dispenser.MaxStore) && me.Metal >= 10;
-        if (!sentryNeeds && !dispenserNeeds) return;
+        if (!sentryNeeds && !dispenserNeeds)
+        {
+            // Everything is in good shape: with a full wallet, go set up a teleporter pair.
+            bool needEntrance = game.TeleporterOf(me, TeleporterRole.Entrance) == null;
+            bool needExit = game.TeleporterOf(me, TeleporterRole.Exit) == null;
+            int needed = ((needEntrance ? 1 : 0) + (needExit ? 1 : 0)) * Teleporter.BuildCost;
+            if (needed > 0 && sentry.Level >= 2 && dispenser != null && me.Metal >= needed) teleCommit = true;
+            return;
+        }
 
         var to = (sentryNeeds ? sentry.Hull.Center : dispenser!.Hull.Center) - me.Eye;
         aimYaw = MathF.Atan2(to.X, to.Z);
@@ -313,6 +327,33 @@ public sealed class BotBrain
             input.Fire = true;
             holdingStill = true;
         }
+    }
+
+    /// <summary>At the build site: place the next missing teleporter end, turning to find room if blocked. True while still busy.</summary>
+    bool BuildTeleporter(float dt, ref PlayerInput input)
+    {
+        bool needEntrance = game.TeleporterOf(me, TeleporterRole.Entrance) == null;
+        bool needExit = game.TeleporterOf(me, TeleporterRole.Exit) == null;
+        if (!needEntrance && !needExit)
+        {
+            teleCommit = false;
+            return false;
+        }
+
+        int mine = game.Teleporters.Count(t => t.Owner == me && !t.Dead);
+        if (teleCountBefore == mine) yawOffset += 1.3f;      // the last attempt placed nothing: face another way
+        teleCountBefore = -1;
+
+        teleTimer -= dt;
+        if (teleTimer > 0 || me.Metal < Teleporter.BuildCost) return true;
+        teleTimer = 1f;
+        aimYaw += yawOffset;
+        yawOffset = 0;
+        input.Yaw = aimYaw;
+        input.Pitch = 0;
+        input.BuildTeleporter = true;
+        teleCountBefore = mine;
+        return true;
     }
 
     float Rand() => (float)(rng.NextDouble() * 2 - 1);
@@ -443,10 +484,28 @@ public sealed class BotBrain
         var own = game.Flags[(int)me.Team];
         var enemy = game.Flags[(int)me.Team.Opposite()];
 
+        // Engineers on a teleporter run go to the entrance site, then the exit site.
+        if (teleCommit && me.Class.Id == PlayerClassId.Engineer)
+        {
+            string side = me.Team == Team.Red ? "R_" : "B_";
+            bool needEntrance = game.TeleporterOf(me, TeleporterRole.Entrance) == null;
+            return game.Map.Nav.Nodes[game.Map.Nav.Find(side + (needEntrance ? "spawnexit" : "bridge"))].Position;
+        }
+
         if (me.CarryingFlag != null) return own.Home;
         if (own.Carrier != null) return own.Carrier.Position;
         if (own.Dropped) return own.Position;
         if (defender) return game.Map.Nav.Nodes[defendNode].Position;
+
+        // Attackers hop on a friendly teleporter if one is up and close by.
+        if (me.TeleportCount != lastTeleportCount) { lastTeleportCount = me.TeleportCount; useTele = false; }
+        if (useTele)
+        {
+            var entrance = game.Teleporters.FirstOrDefault(t => t.Team == me.Team && t.Role == TeleporterRole.Entrance && t.Active
+                && Vector3.Distance(t.Position, me.Position) < 1000f
+                && game.Teleporters.Any(x => x.Owner == t.Owner && x.Role == TeleporterRole.Exit && x.Active));
+            if (entrance != null) return entrance.Position;
+        }
         return enemy.Position;
     }
 

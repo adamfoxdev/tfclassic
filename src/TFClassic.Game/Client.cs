@@ -24,7 +24,7 @@ sealed class Client
 
     float yaw, pitch;
     int pendingSlot = -1;
-    bool pendingDisguise, pendingFeign, pendingDispenser;
+    bool pendingDisguise, pendingFeign, pendingDispenser, pendingTeleporter;
     bool swallowKpEnter;   // the key that closed the menu must not also count as alt-fire
     double accumulator;
     float time;
@@ -59,7 +59,7 @@ sealed class Client
                 else PushInput();
                 game.Tick(Dt);
                 pendingSlot = -1;
-                pendingDisguise = pendingFeign = pendingDispenser = false;
+                pendingDisguise = pendingFeign = pendingDispenser = pendingTeleporter = false;
                 accumulator -= Dt;
             }
 
@@ -68,7 +68,7 @@ sealed class Client
     }
 
     /// <summary>Runs the sim for a while with the human idle, then saves a frame and exits.</summary>
-    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false)
+    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false)
     {
         me.Input = new PlayerInput { SelectSlot = -1, Yaw = me.Yaw };
         for (float t = 0; t < warmupSeconds; t += Dt)
@@ -84,6 +84,28 @@ sealed class Client
             pitch = at[4] * MathF.PI / 180f;
             me.Yaw = yaw;
             me.Pitch = pitch;
+        }
+        if (buildTeleporters)
+        {
+            // Debug aid: build an entrance and an exit in open ground, then look at them from a distance.
+            void Stand(float x, float z)
+            {
+                me.Position = new Vector3(x, 0, z);
+                me.Velocity = Vector3.Zero;
+                me.Yaw = yaw = MathF.PI;
+                me.Metal = 200;
+                me.Input = new PlayerInput { SelectSlot = -1, Yaw = yaw };
+                game.Tick(Dt);
+                me.Input.BuildTeleporter = true;
+                game.Tick(Dt);
+                me.Input.BuildTeleporter = false;
+            }
+            Stand(0, 900);
+            Stand(200, 560);
+            for (int i = 0; i < 220; i++) game.Tick(Dt);
+            me.Position = new Vector3(110, 0, 1000);
+            yaw = MathF.PI;
+            pitch = -0.12f;
         }
         if (buildSentry)
         {
@@ -165,6 +187,8 @@ sealed class Client
         if (Raylib.IsKeyPressed(KeyboardKey.F) || Raylib.IsKeyPressed(KeyboardKey.KpMultiply)) pendingDisguise = true;
         // Engineer: B builds / demolishes a dispenser (numpad * as an alternative; Spies use it for disguise).
         if (Raylib.IsKeyPressed(KeyboardKey.B) || Raylib.IsKeyPressed(KeyboardKey.KpMultiply)) pendingDispenser = true;
+        // Engineer: T builds the teleporter entrance, then the exit, then demolishes the pair (numpad / as an alternative).
+        if (Raylib.IsKeyPressed(KeyboardKey.T) || Raylib.IsKeyPressed(KeyboardKey.KpDivide)) pendingTeleporter = true;
         if (Raylib.IsKeyPressed(KeyboardKey.G) || Raylib.IsKeyPressed(KeyboardKey.KpDivide)) pendingFeign = true;
 
         if (Raylib.IsKeyPressed(KeyboardKey.KpAdd)) pendingSlot = (me.Slot + 1) % me.Class.Slots.Length;
@@ -197,7 +221,7 @@ sealed class Client
         var input = new PlayerInput
         {
             SelectSlot = pendingSlot, Yaw = yaw, Pitch = pitch,
-            DisguiseNext = pendingDisguise, Feign = pendingFeign, BuildDispenser = pendingDispenser,
+            DisguiseNext = pendingDisguise, Feign = pendingFeign, BuildDispenser = pendingDispenser, BuildTeleporter = pendingTeleporter,
         };
         if (!menuOpen)
         {

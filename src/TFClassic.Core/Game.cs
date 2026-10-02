@@ -14,6 +14,10 @@ public sealed class Game
     public List<Projectile> Projectiles { get; } = new();
     public List<Sentry> Sentries { get; } = new();
     public List<Dispenser> Dispensers { get; } = new();
+    public List<Teleporter> Teleporters { get; } = new();
+
+    /// <summary>Every engineer-built structure currently in the world.</summary>
+    public IEnumerable<Structure> Structures => Sentries.Cast<Structure>().Concat(Dispensers).Concat(Teleporters);
     public List<Effect> Effects { get; } = new();
     public List<GameEvent> Events { get; } = new();
     public Flag[] Flags { get; }
@@ -127,6 +131,7 @@ public sealed class Game
         foreach (var p in Players) UpdatePlayer(p, dt);
         UpdateSentries(dt);
         UpdateDispensers(dt);
+        UpdateTeleporters(dt);
         UpdateProjectiles(dt);
         UpdateFlags(dt);
         UpdateEffects(dt);
@@ -211,6 +216,7 @@ public sealed class Game
             if (inp.DisguiseNext && !p.Feigning) CycleDisguise(p);
         }
         if (p.Class.Id == PlayerClassId.Engineer && inp.BuildDispenser) ToggleDispenser(p);
+        if (p.Class.Id == PlayerClassId.Engineer && inp.BuildTeleporter) ToggleTeleporter(p);
         if (p.Feigning) return;
 
         if (inp.SelectSlot >= 0 && inp.SelectSlot < p.Class.Slots.Length && inp.SelectSlot != p.Slot)
@@ -318,6 +324,13 @@ public sealed class Game
     void AddTracer(Vector3 a, Vector3 b, Team team) =>
         Effects.Add(new Effect { Kind = EffectKind.Tracer, A = a, B = b, Life = 0.08f, MaxLife = 0.08f, Team = team });
 
+    /// <summary>Nearest hit of a segment against a hull; a segment starting inside counts as t = 0.</summary>
+    static bool HitsHull(in Aabb hull, Vector3 from, Vector3 delta, out float t)
+    {
+        if (hull.Contains(from)) { t = 0; return true; }
+        return Collision.RayAabb(from, delta, hull, out t, out _);
+    }
+
     /// <summary>Fires one ray. Hits the nearest enemy player or structure in front of the first wall; returns the end point.</summary>
     Vector3 HitscanShot(Player? owner, Team team, Vector3 origin, Vector3 dir, float range, float damage,
         float headMultiplier, string weapon, float knock, float slowSeconds = 0f)
@@ -327,32 +340,16 @@ public sealed class Game
         if (World.Raycast(origin, origin + delta, out float tw, out _)) bestT = tw;
 
         Player? victim = null;
-        Sentry? sentry = null;
-        Dispenser? dispenser = null;
+        Structure? structure = null;
         foreach (var q in Players)
         {
             if (q == owner || !q.Alive || q.Team == team || q.Feigning) continue;
-            var hull = q.Hull;
-            float t;
-            if (hull.Contains(origin)) t = 0;
-            else if (!Collision.RayAabb(origin, delta, hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; victim = q; sentry = null; dispenser = null; }
+            if (HitsHull(q.Hull, origin, delta, out float t) && t < bestT) { bestT = t; victim = q; structure = null; }
         }
-        foreach (var s in Sentries)
+        foreach (var s in Structures)
         {
             if (s.Dead || s.Team == team) continue;
-            float t;
-            if (s.Hull.Contains(origin)) t = 0;
-            else if (!Collision.RayAabb(origin, delta, s.Hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; sentry = s; victim = null; dispenser = null; }
-        }
-        foreach (var d in Dispensers)
-        {
-            if (d.Dead || d.Team == team) continue;
-            float t;
-            if (d.Hull.Contains(origin)) t = 0;
-            else if (!Collision.RayAabb(origin, delta, d.Hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; dispenser = d; victim = null; sentry = null; }
+            if (HitsHull(s.Hull, origin, delta, out float t) && t < bestT) { bestT = t; structure = s; victim = null; }
         }
 
         var end = origin + delta * bestT;
@@ -363,13 +360,9 @@ public sealed class Game
                 weapon + (head && headMultiplier >= 2f ? " (headshot)" : ""), dir * knock);
             if (slowSeconds > 0 && victim.Alive) victim.SlowTime = slowSeconds;
         }
-        else if (sentry != null)
+        else if (structure != null)
         {
-            DamageSentry(sentry, owner, damage, weapon);
-        }
-        else if (dispenser != null)
-        {
-            DamageDispenser(dispenser, owner, damage, weapon);
+            DamageStructure(structure, owner, damage, weapon);
         }
         return end;
     }
@@ -381,49 +374,24 @@ public sealed class Game
         if (World.Raycast(eye, eye + delta, out float tw, out _)) bestT = tw;
 
         Player? best = null;
-        Sentry? bestSentry = null;
-        Dispenser? bestDispenser = null;
+        Structure? bestStructure = null;
         foreach (var q in Players)
         {
             if (q == p || !q.Alive || q.Feigning) continue;
             if (q.Team == p.Team && w.Mode != FireMode.Heal) continue;
-            var hull = q.Hull.Expand(new Vector3(6));
-            float t;
-            if (hull.Contains(eye)) t = 0;
-            else if (!Collision.RayAabb(eye, delta, hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; best = q; bestSentry = null; bestDispenser = null; }
+            if (HitsHull(q.Hull.Expand(new Vector3(6)), eye, delta, out float t) && t < bestT) { bestT = t; best = q; bestStructure = null; }
         }
-        foreach (var s in Sentries)
+        foreach (var s in Structures)
         {
             if (s.Dead || (s.Team == p.Team && w.Mode != FireMode.Wrench)) continue;
-            var hull = s.Hull.Expand(new Vector3(6));
-            float t;
-            if (hull.Contains(eye)) t = 0;
-            else if (!Collision.RayAabb(eye, delta, hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; bestSentry = s; best = null; bestDispenser = null; }
-        }
-        foreach (var d in Dispensers)
-        {
-            if (d.Dead || (d.Team == p.Team && w.Mode != FireMode.Wrench)) continue;
-            var hull = d.Hull.Expand(new Vector3(6));
-            float t;
-            if (hull.Contains(eye)) t = 0;
-            else if (!Collision.RayAabb(eye, delta, hull, out t, out _)) continue;
-            if (t < bestT) { bestT = t; bestDispenser = d; best = null; bestSentry = null; }
+            if (HitsHull(s.Hull.Expand(new Vector3(6)), eye, delta, out float t) && t < bestT) { bestT = t; bestStructure = s; best = null; }
         }
 
-        if (bestSentry != null)
+        if (bestStructure != null)
         {
-            if (bestSentry.Team == p.Team) WrenchSentry(p, bestSentry);
-            else if (w.Mode == FireMode.Backstab) SabotageSentry(p, bestSentry);
-            else DamageSentry(bestSentry, p, w.Damage, w.Name);
-            return;
-        }
-        if (bestDispenser != null)
-        {
-            if (bestDispenser.Team == p.Team) WrenchDispenser(p, bestDispenser);
-            else if (w.Mode == FireMode.Backstab) SabotageDispenser(p, bestDispenser);
-            else DamageDispenser(bestDispenser, p, w.Damage, w.Name);
+            if (bestStructure.Team == p.Team) WrenchStructure(p, bestStructure);
+            else if (w.Mode == FireMode.Backstab) SabotageStructure(p, bestStructure);
+            else DamageStructure(bestStructure, p, w.Damage, w.Name);
             return;
         }
         if (best == null) return;
@@ -457,23 +425,14 @@ public sealed class Game
     {
         var muzzle = eye + fwd * 20 + new Vector3(0, -8, 0);
         Effects.Add(new Effect { Kind = EffectKind.Flame, A = muzzle, B = muzzle + fwd * w.Range, Life = 0.15f, MaxLife = 0.15f, Team = p.Team });
-        foreach (var s in Sentries.ToArray())
+        foreach (var s in Structures.ToArray())
         {
             if (s.Dead || s.Team == p.Team) continue;
             var sv = s.Hull.Center - eye;
             float sd = sv.Length();
             if (sd > w.Range || sd < 1f || Vector3.Dot(sv / sd, fwd) < 0.88f) continue;
             if (!World.LineOfSight(eye, s.Hull.Center)) continue;
-            DamageSentry(s, p, w.Damage * 0.5f, w.Name);
-        }
-        foreach (var d in Dispensers.ToArray())
-        {
-            if (d.Dead || d.Team == p.Team) continue;
-            var dv = d.Hull.Center - eye;
-            float dd = dv.Length();
-            if (dd > w.Range || dd < 1f || Vector3.Dot(dv / dd, fwd) < 0.88f) continue;
-            if (!World.LineOfSight(eye, d.Hull.Center)) continue;
-            DamageDispenser(d, p, w.Damage * 0.5f, w.Name);
+            DamageStructure(s, p, w.Damage * 0.5f, w.Name);
         }
         foreach (var q in Players)
         {
@@ -562,26 +521,15 @@ public sealed class Game
         return best;
     }
 
-    /// <summary>Whether the segment strikes an enemy sentry or dispenser before maxT (t is the fraction along it).</summary>
+    /// <summary>Whether the segment strikes an enemy structure before maxT (t is the fraction along it).</summary>
     bool SegmentHitsStructure(Projectile pr, Vector3 from, Vector3 delta, float maxT, out float hitT)
     {
         hitT = maxT;
         bool hit = false;
-        foreach (var s in Sentries)
+        foreach (var s in Structures)
         {
             if (s.Dead || s.Team == pr.Team) continue;
-            float t;
-            if (s.Hull.Contains(from)) t = 0;
-            else if (!Collision.RayAabb(from, delta, s.Hull, out t, out _)) continue;
-            if (t < hitT) { hitT = t; hit = true; }
-        }
-        foreach (var d in Dispensers)
-        {
-            if (d.Dead || d.Team == pr.Team) continue;
-            float t;
-            if (d.Hull.Contains(from)) t = 0;
-            else if (!Collision.RayAabb(from, delta, d.Hull, out t, out _)) continue;
-            if (t < hitT) { hitT = t; hit = true; }
+            if (HitsHull(s.Hull, from, delta, out float t) && t < hitT) { hitT = t; hit = true; }
         }
         return hit;
     }
@@ -679,20 +627,12 @@ public sealed class Game
             Damage(q, owner, self ? full * 0.5f : full, weapon, knock);
         }
 
-        foreach (var s in Sentries.ToArray())
+        foreach (var s in Structures.ToArray())
         {
             if (s.Dead || s.Team == owner.Team) continue;
             float d = s.Hull.DistanceTo(pos);
             if (d >= radius || !World.LineOfSight(pos, s.Hull.Center)) continue;
-            DamageSentry(s, owner, damage * (1f - d / radius), weapon);
-        }
-
-        foreach (var ds in Dispensers.ToArray())
-        {
-            if (ds.Dead || ds.Team == owner.Team) continue;
-            float d = ds.Hull.DistanceTo(pos);
-            if (d >= radius || !World.LineOfSight(pos, ds.Hull.Center)) continue;
-            DamageDispenser(ds, owner, damage * (1f - d / radius), weapon);
+            DamageStructure(s, owner, damage * (1f - d / radius), weapon);
         }
     }
 
@@ -741,14 +681,153 @@ public sealed class Game
         Effects.Add(new Effect { Kind = EffectKind.Gib, A = p.Center, Life = 0.6f, MaxLife = 0.6f, Team = p.Team });
     }
 
-    void SabotageSentry(Player spy, Sentry s)
+    // ───────────────────────── engineer structures ─────────────────────────
+
+    void DamageStructure(Structure s, Player? attacker, float amount, string weapon)
+    {
+        if (s.Dead) return;
+        if (attacker != null && attacker.Team == s.Team) return;
+        s.Health -= amount;
+        if (s.Health > 0) return;
+
+        s.Dead = true;
+        Effects.Add(new Effect { Kind = EffectKind.Explosion, A = s.Hull.Center, Life = 0.4f, MaxLife = 0.4f, Radius = 90f });
+        if (attacker != null)
+        {
+            attacker.Frags++;
+            Events.Add(new GameEvent(Time, $"{attacker.Name} [{weapon}] destroyed {s.Owner.Name}'s {s.Label}", attacker.Team));
+        }
+    }
+
+    void SabotageStructure(Player spy, Structure s)
     {
         if (s.Building || s.Sabotaged) return;
         s.SabotageTimer = 4f;
         s.Saboteur = spy;
-        s.Target = null;
-        Notice(spy, "Sentry sabotaged!");
-        Notice(s.Owner, "Your sentry is being sabotaged! (hit it with the wrench)");
+        if (s is Sentry sentry) sentry.Target = null;
+        Notice(spy, $"{Capitalize(s.Label)} sabotaged!");
+        Notice(s.Owner, $"Your {s.Label} is being sabotaged! (hit it with the wrench)");
+    }
+
+    static string Capitalize(string s) => char.ToUpperInvariant(s[0]) + s[1..];
+
+    /// <summary>Counts a sabotaged structure down; returns true while it is disabled (and blows it up when time runs out).</summary>
+    bool TickSabotage(Structure s, float dt)
+    {
+        if (s.SabotageTimer <= 0) return false;
+        s.SabotageTimer -= dt;
+        if (s.SabotageTimer <= 0) DamageStructure(s, s.Saboteur, 99999f, "Sabotage");
+        return true;
+    }
+
+    void WrenchStructure(Player p, Structure s)
+    {
+        switch (s)
+        {
+            case Sentry sentry: WrenchSentry(p, sentry); break;
+            case Dispenser dispenser: WrenchDispenser(p, dispenser); break;
+            case Teleporter tele: WrenchTeleporter(p, tele); break;
+        }
+    }
+
+    // ───────────────────────── teleporters ─────────────────────────
+
+    public Teleporter? TeleporterOf(Player p, TeleporterRole role) =>
+        Teleporters.FirstOrDefault(t => t.Owner == p && t.Role == role && !t.Dead);
+
+    /// <summary>
+    /// Engineer's teleporter key: builds the entrance first, then the exit; with both standing it
+    /// demolishes the pair.
+    /// </summary>
+    void ToggleTeleporter(Player p)
+    {
+        var entrance = TeleporterOf(p, TeleporterRole.Entrance);
+        var exit = TeleporterOf(p, TeleporterRole.Exit);
+        if (entrance != null && exit != null)
+        {
+            entrance.Dead = exit.Dead = true;
+            p.Metal = Math.Min(p.Class.MaxMetal, p.Metal + 80);
+            foreach (var t in new[] { entrance, exit })
+                Effects.Add(new Effect { Kind = EffectKind.Explosion, A = t.Hull.Center, Life = 0.25f, MaxLife = 0.25f, Radius = 40f });
+            Notice(p, "Teleporters demolished (+80 metal)");
+            return;
+        }
+
+        var role = entrance == null ? TeleporterRole.Entrance : TeleporterRole.Exit;
+        string name = role == TeleporterRole.Entrance ? "entrance" : "exit";
+        if (p.Metal < Teleporter.BuildCost) { Notice(p, $"Need {Teleporter.BuildCost} metal to build a teleporter {name}"); return; }
+        if (!FindBuildSpot(p, Teleporter.HullHalf, out var spot)) return;
+
+        p.Metal -= Teleporter.BuildCost;
+        Teleporters.Add(new Teleporter { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw, Role = role });
+        Notice(p, role == TeleporterRole.Entrance
+            ? "Building teleporter entrance... (T again, elsewhere, for the exit)"
+            : "Building teleporter exit...");
+    }
+
+    void WrenchTeleporter(Player p, Teleporter t)
+    {
+        if (t.Sabotaged)
+        {
+            t.SabotageTimer = 0;
+            Notice(p, "Sabotage removed");
+            return;
+        }
+        if (t.Building) return;
+        if (t.Health < Teleporter.MaxHealth && p.Metal >= 10)
+        {
+            t.Health = MathF.Min(Teleporter.MaxHealth, t.Health + 40);
+            p.Metal -= 10;
+            Effects.Add(new Effect { Kind = EffectKind.Heal, A = t.Hull.Center, Life = 0.4f, MaxLife = 0.4f, Team = t.Team });
+        }
+    }
+
+    void UpdateTeleporters(float dt)
+    {
+        foreach (var t in Teleporters)
+        {
+            if (t.Dead) continue;
+            if (t.Building) { t.BuildTimer -= dt; continue; }
+            t.CooldownTimer = MathF.Max(0, t.CooldownTimer - dt);
+            TickSabotage(t, dt);
+        }
+
+        foreach (var entrance in Teleporters)
+        {
+            if (entrance.Role != TeleporterRole.Entrance || !entrance.Active || entrance.CooldownTimer > 0) continue;
+            var exit = Teleporters.FirstOrDefault(x => x.Owner == entrance.Owner && x.Role == TeleporterRole.Exit && x.Active);
+            if (exit == null) continue;
+
+            foreach (var q in Players)
+            {
+                if (!q.Alive || q.Team != entrance.Team || q.Feigning) continue;
+                float dx = q.Position.X - entrance.Position.X, dz = q.Position.Z - entrance.Position.Z;
+                if (dx * dx + dz * dz > 40f * 40f || MathF.Abs(q.Position.Y - entrance.Position.Y) > 24f) continue;
+                Teleport(q, entrance, exit);
+                break;   // one traveller per cooldown
+            }
+        }
+        Teleporters.RemoveAll(t => t.Dead);
+    }
+
+    void Teleport(Player q, Teleporter entrance, Teleporter exit)
+    {
+        // Anyone standing on the exit pad is telefragged.
+        foreach (var enemy in Players.ToArray())
+        {
+            if (!enemy.Alive || enemy.Team == q.Team) continue;
+            float dx = enemy.Position.X - exit.Position.X, dz = enemy.Position.Z - exit.Position.Z;
+            if (dx * dx + dz * dz < 32f * 32f && MathF.Abs(enemy.Position.Y - exit.Position.Y) < 60f)
+                Kill(enemy, q, "Telefrag");
+        }
+
+        Effects.Add(new Effect { Kind = EffectKind.Heal, A = entrance.Hull.Center + new Vector3(0, 20, 0), Life = 0.5f, MaxLife = 0.5f, Team = q.Team });
+        q.Position = exit.Position + new Vector3(0, 0.5f, 0);
+        q.Velocity = Vector3.Zero;
+        q.OnGround = true;
+        q.TeleportCount++;
+        entrance.CooldownTimer = exit.CooldownTimer = Teleporter.Cooldown;
+        Effects.Add(new Effect { Kind = EffectKind.Heal, A = exit.Hull.Center + new Vector3(0, 20, 0), Life = 0.5f, MaxLife = 0.5f, Team = q.Team });
     }
 
     // ───────────────────────── sentry guns ─────────────────────────
@@ -802,8 +881,7 @@ public sealed class Game
         var box = Aabb.FromCenter(center, half);
         if (World.Overlaps(center, half)
             || World.InZone(ZoneKind.Water, spot + new Vector3(0, 10, 0))
-            || Sentries.Any(s => !s.Dead && s.Hull.Intersects(box))
-            || Dispensers.Any(d => !d.Dead && d.Hull.Intersects(box)))
+            || Structures.Any(s => !s.Dead && s.Hull.Intersects(box)))
         {
             Notice(p, "No room to build here");
             return false;
@@ -855,43 +933,13 @@ public sealed class Game
         }
     }
 
-    void SabotageDispenser(Player spy, Dispenser d)
-    {
-        if (d.Building || d.Sabotaged) return;
-        d.SabotageTimer = 4f;
-        d.Saboteur = spy;
-        Notice(spy, "Dispenser sabotaged!");
-        Notice(d.Owner, "Your dispenser is being sabotaged! (hit it with the wrench)");
-    }
-
-    void DamageDispenser(Dispenser d, Player? attacker, float amount, string weapon)
-    {
-        if (d.Dead) return;
-        if (attacker != null && attacker.Team == d.Team) return;
-        d.Health -= amount;
-        if (d.Health > 0) return;
-
-        d.Dead = true;
-        Effects.Add(new Effect { Kind = EffectKind.Explosion, A = d.Hull.Center, Life = 0.4f, MaxLife = 0.4f, Radius = 80f });
-        if (attacker != null)
-        {
-            attacker.Frags++;
-            Events.Add(new GameEvent(Time, $"{attacker.Name} [{weapon}] destroyed {d.Owner.Name}'s dispenser", attacker.Team));
-        }
-    }
-
     void UpdateDispensers(float dt)
     {
         foreach (var d in Dispensers)
         {
             if (d.Dead) continue;
             if (d.Building) { d.BuildTimer -= dt; continue; }
-            if (d.SabotageTimer > 0)
-            {
-                d.SabotageTimer -= dt;
-                if (d.SabotageTimer <= 0) DamageDispenser(d, d.Saboteur, 99999f, "Sabotage");
-                continue;
-            }
+            if (TickSabotage(d, dt)) continue;
 
             d.UseTimer -= dt;
             if (d.UseTimer > 0 || d.Store <= 0) continue;
@@ -961,35 +1009,13 @@ public sealed class Game
         }
     }
 
-    void DamageSentry(Sentry s, Player? attacker, float amount, string weapon)
-    {
-        if (s.Dead) return;
-        if (attacker != null && attacker.Team == s.Team) return;
-        s.Health -= amount;
-        if (s.Health > 0) return;
-
-        s.Dead = true;
-        Effects.Add(new Effect { Kind = EffectKind.Explosion, A = s.Hull.Center, Life = 0.4f, MaxLife = 0.4f, Radius = 90f });
-        if (attacker != null)
-        {
-            attacker.Frags++;
-            Events.Add(new GameEvent(Time, $"{attacker.Name} [{weapon}] destroyed {s.Owner.Name}'s sentry", attacker.Team));
-        }
-    }
-
     void UpdateSentries(float dt)
     {
         foreach (var s in Sentries)
         {
             if (s.Dead) continue;
             if (s.Building) { s.BuildTimer -= dt; continue; }
-            if (s.SabotageTimer > 0)
-            {
-                s.Target = null;
-                s.SabotageTimer -= dt;
-                if (s.SabotageTimer <= 0) DamageSentry(s, s.Saboteur, 99999f, "Sabotage");
-                continue;
-            }
+            if (TickSabotage(s, dt)) { s.Target = null; continue; }
 
             s.FireCooldown -= dt;
             s.RocketCooldown -= dt;
@@ -1191,6 +1217,7 @@ public sealed class Game
         Projectiles.Clear();
         Sentries.Clear();
         Dispensers.Clear();
+        Teleporters.Clear();
         foreach (var p in Players) Respawn(p);
     }
 

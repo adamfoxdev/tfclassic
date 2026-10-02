@@ -22,6 +22,7 @@ sealed class WorldRenderer
 
         DrawSentries();
         DrawDispensers();
+        DrawTeleporters();
         DrawFlags(time);
         DrawProjectiles();
         DrawEffects();
@@ -152,6 +153,46 @@ sealed class WorldRenderer
 
             float frac = Math.Clamp(d.Health / Dispenser.MaxHealth, 0f, 1f);
             var barPos = d.Position + new Vector3(0, 66, 0);
+            Raylib.DrawCubeV(barPos, new Vector3(26, 2, 2), new Color(30, 30, 30, 200));
+            Raylib.DrawCubeV(barPos + new Vector3(-13 * (1 - frac), 0, 0), new Vector3(26 * frac, 3, 3),
+                frac > 0.5f ? new Color(90, 230, 90, 255) : new Color(240, 90, 70, 255));
+        }
+    }
+
+    void DrawTeleporters()
+    {
+        foreach (var t in game.Teleporters)
+        {
+            var team = Palette.Team(t.Team);
+            bool entrance = t.Role == TeleporterRole.Entrance;
+            bool partnerUp = game.Teleporters.Any(x => x.Owner == t.Owner && x.Role != t.Role && x.Active);
+            bool ready = t.Active && partnerUp && t.CooldownTimer <= 0;
+            float grow = t.Building ? 0.3f + 0.7f * (1f - t.BuildTimer / 3f) : 1f;
+
+            var glow = entrance ? new Color(80, 220, 255, 255) : new Color(255, 170, 60, 255);
+            if (!ready) glow = new Color(95, 95, 100, 255);
+            float pulse = 0.75f + 0.25f * MathF.Sin(game.Time * 6f);
+
+            Rlgl.PushMatrix();
+            Rlgl.Translatef(t.Position.X, t.Position.Y, t.Position.Z);
+            Draw3D.Box(new Vector3(-28, 0, -28), new Vector3(28, 2, 28), Palette.Shade(team, 0.9f), true);                  // team plate
+            Draw3D.Box(new Vector3(-24, 2, -24), new Vector3(24, 6 * grow, 24), new Color(70, 72, 82, 255), true);           // pad
+            if (!t.Building)
+                Draw3D.Box(new Vector3(-14, 6, -14), new Vector3(14, 8, 14), ready ? Palette.Shade(glow, pulse) : glow);    // glowing core
+            Rlgl.PopMatrix();
+
+            if (ready)
+                Raylib.DrawCubeV(t.Position + new Vector3(0, 60, 0), new Vector3(26, 120, 26), Palette.WithAlpha(glow, 55));
+
+            if (t.Sabotaged)
+            {
+                float flicker = 0.5f + 0.5f * MathF.Sin(game.Time * 25f);
+                Raylib.DrawSphere(t.Position + new Vector3(0, 22 + flicker * 6, 0), 6f + flicker * 4f, new Color(70, 70, 70, 190));
+                Raylib.DrawSphere(t.Position + new Vector3(0, 12, 0), 4f, new Color(255, (int)(120 + 100 * flicker), 40, 220));
+            }
+
+            float frac = Math.Clamp(t.Health / Teleporter.MaxHealth, 0f, 1f);
+            var barPos = t.Position + new Vector3(0, 30, 0);
             Raylib.DrawCubeV(barPos, new Vector3(26, 2, 2), new Color(30, 30, 30, 200));
             Raylib.DrawCubeV(barPos + new Vector3(-13 * (1 - frac), 0, 0), new Vector3(26 * frac, 3, 3),
                 frac > 0.5f ? new Color(90, 230, 90, 255) : new Color(240, 90, 70, 255));
