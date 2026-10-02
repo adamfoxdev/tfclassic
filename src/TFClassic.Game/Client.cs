@@ -231,6 +231,8 @@ sealed class Client
             if (Raylib.IsKeyDown(KeyboardKey.A) || Raylib.IsKeyDown(KeyboardKey.Left) || Raylib.IsKeyDown(KeyboardKey.Kp7)) input.Right -= 1;
             input.Forward = Math.Clamp(input.Forward, -1f, 1f);
             input.Right = Math.Clamp(input.Right, -1f, 1f);
+            input.Grenade1 = Raylib.IsKeyDown(KeyboardKey.Q) || Raylib.IsKeyDown(KeyboardKey.Kp1);
+            input.Grenade2 = Raylib.IsKeyDown(KeyboardKey.E) || Raylib.IsKeyDown(KeyboardKey.Kp3);
             input.Jump = Raylib.IsKeyDown(KeyboardKey.Space);
             input.Fire = Raylib.IsMouseButtonDown(MouseButton.Left) || Raylib.IsKeyDown(KeyboardKey.Kp0);
             bool kpEnter = Raylib.IsKeyDown(KeyboardKey.KpEnter);
@@ -249,7 +251,16 @@ sealed class Client
         float fov = me.Alive && me.SniperCharge > 0 ? 22f : 72f;
         float cp = MathF.Cos(me.Alive ? me.Pitch : pitch);
         var yawNow = me.Alive || !menuOpen ? yaw : me.Yaw;
-        var fwd = new Vector3(MathF.Sin(yawNow) * cp, MathF.Sin(me.Alive ? me.Pitch : pitch), MathF.Cos(yawNow) * cp);
+        float pitchNow = me.Alive ? me.Pitch : pitch;
+        if (me.Alive && me.ConcussTime > 0)
+        {
+            // Concussed: the whole view sways (the game also throws your aim off by a similar amount).
+            float shake = MathF.Min(1f, me.ConcussTime / 2f);
+            yawNow += MathF.Sin(time * 4.3f) * 0.07f * shake;
+            pitchNow += MathF.Cos(time * 3.7f) * 0.05f * shake;
+            cp = MathF.Cos(pitchNow);
+        }
+        var fwd = new Vector3(MathF.Sin(yawNow) * cp, MathF.Sin(pitchNow), MathF.Cos(yawNow) * cp);
         return new Camera3D
         {
             Position = eye,

@@ -105,6 +105,10 @@ public sealed class Game
         p.BurnTime = 0;
         p.ResupplyCooldown = 0;
         p.CarryingFlag = null;
+        p.Grenades[0] = p.Class.Frag;
+        p.Grenades[1] = p.Class.Concussion;
+        p.Primed = -1;
+        p.ConcussTime = 0;
         p.DisguiseTeam = null;
         p.DisguiseTimer = 0;
         p.Feigning = false;
@@ -153,6 +157,14 @@ public sealed class Game
         p.ResupplyCooldown = MathF.Max(0, p.ResupplyCooldown - dt);
 
         p.SlowTime = MathF.Max(0, p.SlowTime - dt);
+        if (p.ConcussTime > 0)
+        {
+            // A concussed player's aim wanders: the crosshair stays put but shots land off to the side.
+            p.ConcussTime = MathF.Max(0, p.ConcussTime - dt);
+            float wobble = 0.09f * MathF.Min(1f, p.ConcussTime / 2f);
+            p.Input.Yaw += wobble * MathF.Sin(Time * 9f);
+            p.Input.Pitch += wobble * MathF.Cos(Time * 7f);
+        }
         p.FeignCooldown = MathF.Max(0, p.FeignCooldown - dt);
         if (p.DisguiseTimer > 0) p.DisguiseTimer = MathF.Max(0, p.DisguiseTimer - dt);
         if (p.Feigning)
@@ -188,17 +200,21 @@ public sealed class Game
             Resupply(p);
 
         HandleWeapons(p, dt);
+        HandleGrenades(p, dt);
     }
 
     void Resupply(Player p)
     {
-        bool changed = p.Health < p.Class.MaxHealth || p.Armor < p.Class.MaxArmor || p.Metal < p.Class.MaxMetal;
+        bool changed = p.Health < p.Class.MaxHealth || p.Armor < p.Class.MaxArmor || p.Metal < p.Class.MaxMetal
+                       || p.Grenades[0] < p.Class.Frag || p.Grenades[1] < p.Class.Concussion;
         for (int i = 1; i < p.Ammo.Length; i++)
             if (p.Ammo[i] < p.Class.MaxAmmo[i]) changed = true;
         if (!changed) return;
         p.Health = p.Class.MaxHealth;
         p.Armor = p.Class.MaxArmor;
         p.Metal = Math.Min(p.Class.MaxMetal, p.Metal + 20);   // lockers only top metal up a little
+        p.Grenades[0] = p.Class.Frag;
+        p.Grenades[1] = p.Class.Concussion;
         for (int i = 0; i < p.Ammo.Length; i++) p.Ammo[i] = p.Class.MaxAmmo[i];
         p.ResupplyCooldown = 3f;
     }
@@ -485,8 +501,10 @@ public sealed class Game
 
     void UpdateProjectiles(float dt)
     {
-        foreach (var pr in Projectiles)
+        // Index loop: an explosion can kill a player who drops a live grenade, which appends to the list.
+        for (int i = 0, n = Projectiles.Count; i < n; i++)
         {
+            var pr = Projectiles[i];
             if (pr.Dead) continue;
             pr.Age += dt;
 
@@ -497,6 +515,8 @@ public sealed class Game
                     break;
                 case ProjectileKind.Grenade:
                 case ProjectileKind.Pipe:
+                case ProjectileKind.HandGrenade:
+                case ProjectileKind.Concussion:
                     UpdateBouncer(pr, dt);
                     break;
             }
@@ -559,10 +579,10 @@ public sealed class Game
 
     void UpdateBouncer(Projectile pr, float dt)
     {
-        if (pr.Kind == ProjectileKind.Grenade && pr.Age >= pr.Fuse)
+        if (pr.Age >= pr.Fuse)
         {
             pr.Dead = true;
-            Explode(pr.Position, pr.Owner, pr.Damage, pr.Splash, "Grenade");
+            DetonateTimed(pr);
             return;
         }
         if (pr.Stuck) return;
@@ -633,6 +653,123 @@ public sealed class Game
             float d = s.Hull.DistanceTo(pos);
             if (d >= radius || !World.LineOfSight(pos, s.Hull.Center)) continue;
             DamageStructure(s, owner, damage * (1f - d / radius), weapon);
+        }
+    }
+
+    // ───────────────────────── hand grenades ─────────────────────────
+
+    const float GrenadeFuse = 3f;
+    const float FragDamage = 110f, FragRadius = 150f, ConcussionRadius = 260f;
+
+    /// <summary>Hold the key to prime (and cook) a grenade, release to throw it. Cook too long and it goes off in your hand.</summary>
+    void HandleGrenades(Player p, float dt)
+    {
+        var inp = p.Input;
+        bool g1 = inp.Grenade1, g2 = inp.Grenade2;
+
+        if (p.Primed < 0)
+        {
+            if (!p.Feigning && !MatchOver)
+            {
+                if (g1 && !p.PrevGrenade1 && p.Grenades[0] > 0) Prime(p, GrenadeKind.Frag);
+                else if (g2 && !p.PrevGrenade2 && p.Grenades[1] > 0) Prime(p, GrenadeKind.Concussion);
+            }
+        }
+        else
+        {
+            p.PrimedTimer -= dt;
+            bool held = p.Primed == (int)GrenadeKind.Frag ? g1 : g2;
+            if (p.PrimedTimer <= 0) ThrowGrenade(p, inHand: true);
+            else if (!held) ThrowGrenade(p);
+        }
+        p.PrevGrenade1 = g1;
+        p.PrevGrenade2 = g2;
+    }
+
+    void Prime(Player p, GrenadeKind kind)
+    {
+        p.Primed = (int)kind;
+        p.PrimedTimer = GrenadeFuse;
+        p.Grenades[(int)kind]--;
+        BreakDisguise(p);
+    }
+
+    /// <summary>Throws (or drops, or detonates in the hand) the grenade the player is cooking.</summary>
+    void ThrowGrenade(Player p, bool dropped = false, bool inHand = false)
+    {
+        var kind = (GrenadeKind)p.Primed;
+        float fuse = MathF.Max(0.05f, p.PrimedTimer);
+        p.Primed = -1;
+
+        var pr = new Projectile
+        {
+            Kind = kind == GrenadeKind.Frag ? ProjectileKind.HandGrenade : ProjectileKind.Concussion,
+            Owner = p,
+            Team = p.Team,
+            Damage = kind == GrenadeKind.Frag ? FragDamage : 0f,
+            Splash = kind == GrenadeKind.Frag ? FragRadius : ConcussionRadius,
+            Fuse = fuse,
+        };
+
+        if (inHand)
+        {
+            pr.Position = p.Eye + new Vector3(0, -12, 0);
+            pr.Fuse = 0;
+            DetonateTimed(pr);
+            return;
+        }
+        if (dropped)
+        {
+            pr.Position = p.Center;
+            pr.Velocity = new Vector3(p.Velocity.X * 0.3f, 60f, p.Velocity.Z * 0.3f);
+        }
+        else
+        {
+            var fwd = p.Forward;
+            pr.Position = p.Eye + fwd * 16f + new Vector3(0, -8, 0);
+            pr.Velocity = fwd * 520f + new Vector3(0, 110f, 0) + p.Velocity * 0.5f;
+            BreakDisguise(p);
+        }
+        Projectiles.Add(pr);
+    }
+
+    /// <summary>A timed projectile's fuse ran out (any bouncing kind).</summary>
+    void DetonateTimed(Projectile pr)
+    {
+        switch (pr.Kind)
+        {
+            case ProjectileKind.Concussion:
+                ExplodeConcussion(pr.Position, pr.Owner, pr.Splash);
+                break;
+            case ProjectileKind.HandGrenade:
+                Explode(pr.Position, pr.Owner, pr.Damage, pr.Splash, "Hand Grenade");
+                break;
+            default:
+                Explode(pr.Position, pr.Owner, pr.Damage, pr.Splash, "Grenade");
+                break;
+        }
+    }
+
+    /// <summary>No damage: shoves everyone nearby (teammates and the thrower too) and leaves them dizzy.</summary>
+    void ExplodeConcussion(Vector3 pos, Player owner, float radius)
+    {
+        Effects.Add(new Effect { Kind = EffectKind.Concussion, A = pos, Life = 0.5f, MaxLife = 0.5f, Radius = radius });
+
+        foreach (var q in Players)
+        {
+            if (!q.Alive) continue;
+            float d = q.Hull.DistanceTo(pos);
+            if (d >= radius) continue;
+            if (!World.LineOfSight(pos, q.Center) && !World.LineOfSight(pos, q.Position + new Vector3(0, 8, 0))) continue;
+            if (q != owner && q.SpawnProtect > 0) continue;
+
+            float falloff = 1f - d / radius;
+            var away = q.Center - pos;
+            away = away.LengthSquared() < 1e-4f ? Vector3.UnitY : Vector3.Normalize(away);
+            var push = away * 880f * falloff + new Vector3(0, 160f * falloff, 0);
+            q.Velocity += push;
+            if (push.Y > 0) q.OnGround = false;
+            q.ConcussTime = MathF.Max(q.ConcussTime, 8f * falloff);
         }
     }
 
@@ -1098,6 +1235,7 @@ public sealed class Game
         victim.SniperCharge = 0;
         victim.Feigning = false;
         victim.DisguiseTeam = null;
+        if (victim.Primed >= 0) ThrowGrenade(victim, dropped: true);
 
         if (killer != null && killer != victim) killer.Frags++;
         else victim.Frags--;

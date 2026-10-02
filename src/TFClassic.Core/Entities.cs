@@ -11,6 +11,8 @@ public struct PlayerInput
     public bool DisguiseNext; // edge: start disguising as the next enemy class (Spy)
     public bool Feign;        // edge: toggle feigning death (Spy)
     public bool BuildDispenser; // edge: build or demolish a dispenser (Engineer)
+    public bool Grenade1;     // held: prime/cook a frag grenade, release to throw
+    public bool Grenade2;     // held: same for the secondary (concussion) grenade
     public bool BuildTeleporter; // edge: build entrance, then exit, then demolish both (Engineer)
     public bool AltFire;    // held
     public float Yaw;       // radians; 0 faces +Z, increasing turns left
@@ -60,6 +62,13 @@ public sealed class Player
     public float SlowTime;
     public int TeleportCount;
 
+    // Hand grenades: [0] frag, [1] concussion. Primed = -1 when nothing is being cooked.
+    public int[] Grenades = new int[2];
+    public int Primed = -1;
+    public float PrimedTimer;
+    public bool PrevGrenade1, PrevGrenade2;
+    public float ConcussTime;
+
     /// <summary>Fully disguised (the 2 s transition is over).</summary>
     public bool IsDisguised => DisguiseTeam.HasValue && DisguiseTimer <= 0f;
     public bool IsDisguisedAs(Team t) => IsDisguised && DisguiseTeam == t;
@@ -92,7 +101,7 @@ public sealed class Player
     public Vector3 Right => new(-MathF.Cos(Yaw), 0, MathF.Sin(Yaw));
 }
 
-public enum ProjectileKind { Rocket, Grenade, Pipe }
+public enum ProjectileKind { Rocket, Grenade, Pipe, HandGrenade, Concussion }
 
 public sealed class Projectile
 {
@@ -118,7 +127,7 @@ public sealed class Flag
     public bool Dropped => Carrier == null && !AtHome;
 }
 
-public enum EffectKind { Tracer, Explosion, Flame, Gib, Heal }
+public enum EffectKind { Tracer, Explosion, Flame, Gib, Heal, Concussion }
 
 public sealed class Effect
 {

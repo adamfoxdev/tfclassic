@@ -44,6 +44,8 @@ public sealed class BotBrain
     int buildFails;
     bool triedBuild;
     bool dispenserTried, dispenserStarted;
+    bool grenadeThrowing;
+    float grenadeHold, grenadeCooldown;
     bool teleCommit, useTele;
     float teleTimer;
     int teleCountBefore = -1, lastTeleportCount;
@@ -64,6 +66,8 @@ public sealed class BotBrain
         dispenserStarted = false;
         dispenserTried = false;
         useTele = rng.NextDouble() < 0.7;
+        grenadeThrowing = false;
+        grenadeCooldown = 2f + (float)rng.NextDouble() * 5f;
         lastTeleportCount = me.TeleportCount;
         path.Clear();
         pathGoal = -1;
@@ -205,9 +209,52 @@ public sealed class BotBrain
             }
         }
 
+        GrenadeTick(dt, engaging, distToTarget, ref input);
         if (me.Class.Id == PlayerClassId.Engineer) EngineerTick(dt, wantMove, engaging, ref input);
         UpdateStuck(dt, wantMove && !holdingStill, ref input);
         me.Input = input;
+    }
+
+    /// <summary>
+    /// Lobs a cooked frag grenade at a visible target at mid range: prime, hold for roughly the flight time
+    /// so it goes off near landing, release.
+    /// </summary>
+    void GrenadeTick(float dt, bool engaging, float dist, ref PlayerInput input)
+    {
+        grenadeCooldown -= dt;
+
+        if (grenadeThrowing)
+        {
+            grenadeHold -= dt;
+            input.Grenade1 = grenadeHold > 0f;
+            if (grenadeHold <= 0f)
+            {
+                grenadeThrowing = false;
+                grenadeCooldown = 6f + (float)rng.NextDouble() * 6f;
+            }
+            if (engaging) AimLob(dist, ref input);
+            return;
+        }
+
+        if (!engaging || grenadeCooldown > 0f || me.Grenades[0] <= 0 || me.Primed >= 0) return;
+        if (dist < 220f || dist > 700f || reactTimer > 0f || holdingStill) return;
+        if (me.Class.Id == PlayerClassId.Spy && me.DisguiseTeam.HasValue) return;   // keep the disguise
+
+        grenadeThrowing = true;
+        grenadeHold = Math.Clamp(2.5f - dist / 450f, 0.5f, 2.2f);
+        input.Grenade1 = true;
+        AimLob(dist, ref input);
+    }
+
+    /// <summary>Point the view up by the arc a thrown grenade needs to reach the target.</summary>
+    void AimLob(float dist, ref PlayerInput input)
+    {
+        var to = TargetCenter - me.Eye;
+        float horiz = MathF.Sqrt(to.X * to.X + to.Z * to.Z);
+        aimYaw = MathF.Atan2(to.X, to.Z);
+        aimPitch = MathF.Atan2(to.Y, horiz) + LobAngle(horiz, 560f) + 0.05f;
+        input.Yaw = aimYaw;
+        input.Pitch = aimPitch;
     }
 
     /// <summary>Spies disguise as the enemy, then close in on whatever they can stab or sabotage.</summary>

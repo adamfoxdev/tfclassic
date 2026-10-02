@@ -245,6 +245,16 @@ sealed class WorldRenderer
                 case ProjectileKind.Pipe:
                     Raylib.DrawSphere(pr.Position, 5f, Palette.Team(pr.Team));
                     break;
+                case ProjectileKind.HandGrenade:
+                case ProjectileKind.Concussion:
+                {
+                    // Flashes faster as the fuse runs down.
+                    float left = pr.Fuse - pr.Age;
+                    bool flash = left < 1f && ((int)(left * (left < 0.4f ? 14 : 7)) % 2 == 0);
+                    var body = pr.Kind == ProjectileKind.HandGrenade ? new Color(60, 100, 60, 255) : new Color(90, 190, 230, 255);
+                    Raylib.DrawSphere(pr.Position, 4.5f, flash ? new Color(255, 80, 60, 255) : body);
+                    break;
+                }
             }
         }
     }
@@ -262,6 +272,10 @@ sealed class WorldRenderer
                 case EffectKind.Explosion:
                     Raylib.DrawSphere(e.A, e.Radius * (0.25f + 0.75f * t), new Color(255, 150, 40, (int)(200 * (1 - t))));
                     Raylib.DrawSphere(e.A, e.Radius * 0.35f * (1 - t), new Color(255, 240, 160, 230));
+                    break;
+                case EffectKind.Concussion:
+                    Raylib.DrawSphere(e.A, e.Radius * (0.15f + 0.85f * t), new Color(120, 210, 255, (int)(110 * (1 - t))));
+                    Raylib.DrawSphereWires(e.A, e.Radius * (0.15f + 0.85f * t), 10, 10, new Color(220, 245, 255, (int)(200 * (1 - t))));
                     break;
                 case EffectKind.Flame:
                     for (int i = 1; i <= 6; i++)

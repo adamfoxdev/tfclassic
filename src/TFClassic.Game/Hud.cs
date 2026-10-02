@@ -29,6 +29,7 @@ sealed class Hud
 
         if (me.Alive) DrawCrosshair(me, w, h);
         DrawVitals(me, w, h);
+        DrawGrenades(me, w, h);
         DrawScoreBar(me, w);
         DrawKillFeed(w);
         DrawFlagStatus(me, w, h);
@@ -127,6 +128,30 @@ sealed class Hud
         if (me.CarryingFlag != null)
             TextCentered(own.AtHome ? "YOU HAVE THE FLAG - GET BACK TO YOUR BASE!" : "YOU HAVE THE FLAG - YOUR FLAG IS MISSING, RECOVER IT!",
                 w / 2, h / 2 + 120, 24, new Color(255, 230, 90, 255));
+    }
+
+    void DrawGrenades(Player me, int w, int h)
+    {
+        string text = $"Q frag x{me.Grenades[0]}";
+        if (me.Class.Concussion > 0) text += $"   E concussion x{me.Grenades[1]}";
+        Text(text, w - 250, h - 140, 14, Color.LightGray);
+
+        if (me.Alive && me.Primed >= 0)
+        {
+            string kind = me.Primed == (int)GrenadeKind.Frag ? "FRAG" : "CONCUSSION";
+            float frac = Math.Clamp(me.PrimedTimer / 3f, 0f, 1f);
+            int bw = 220, bx = w / 2 - bw / 2, by = h / 2 + 60;
+            Raylib.DrawRectangle(bx, by, bw, 12, new Color(0, 0, 0, 160));
+            Raylib.DrawRectangle(bx, by, (int)(bw * frac), 12, frac > 0.35f ? new Color(255, 200, 70, 255) : new Color(255, 80, 60, 255));
+            Raylib.DrawRectangleLines(bx, by, bw, 12, Color.White);
+            TextCentered($"{kind} PRIMED  {me.PrimedTimer:F1}s  (release to throw)", w / 2, by - 22, 16, Color.White);
+        }
+
+        if (me.Alive && me.ConcussTime > 0)
+        {
+            Raylib.DrawRectangle(0, 0, w, h, new Color(120, 200, 255, (int)(Math.Min(1f, me.ConcussTime / 3f) * 55)));
+            TextCentered("CONCUSSED", w / 2, h / 2 + 130, 22, new Color(170, 225, 255, 255));
+        }
     }
 
     void DrawSpy(Player me, int w, int h)
@@ -316,9 +341,9 @@ sealed class Hud
 
         TextCentered(firstJoin ? "Press 1-9 to choose a class, ENTER to join" : "Press 1-9 to choose, ENTER to confirm (applies on respawn or in your resupply room)",
             w / 2, y + 20, 20, Color.White);
-        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: sentry / B dispenser / T teleporters  -  1/2/3 weapons  -  F/G spy  -  TAB scores  -  M menu  -  ESC quit",
+        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: sentry / B dispenser / T teleporters  -  1/2/3 weapons  -  Q/E grenades (hold to cook)  -  F/G spy  -  TAB scores  -  M menu  -  ESC quit",
             w / 2, y + 56, 16, Color.LightGray);
-        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  Enter or . alt-fire  -  +/- weapon  -  * disguise/dispenser  -  / feign/teleporter",
+        TextCentered("No mouse?  Numpad 4/6/8/2 look (5 level)  -  arrows or 7/9 move & strafe  -  Numpad 0 fire  -  1/3 grenades  -  Enter or . alt-fire  -  +/- weapon  -  * disguise/dispenser  -  / feign/teleporter",
             w / 2, y + 80, 16, new Color(255, 230, 140, 255));
     }
 }

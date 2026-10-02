@@ -25,6 +25,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Left mouse | fire (sniper: hold to charge, release to shoot) |
 | Right mouse | Demoman: detonate pipebombs. Engineer: build a sentry (again to demolish it) |
 | `1` `2` `3` / wheel | switch weapon |
+| `Q` / `E` | hold to prime a frag / concussion grenade (cook it), release to throw |
 | `Tab` | scoreboard |
 | `F` / `G` | Spy: cycle disguise as an enemy class / feign death |
 | `B` | Engineer: build a dispenser (again to demolish it) |
@@ -41,6 +42,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Numpad `0` | fire (hold; sniper charges while held) |
 | Numpad `Enter` or `.` | alt-fire (detonate pipebombs, build/demolish sentry) |
 | Numpad `+` / `-` | next / previous weapon |
+| Numpad `1` / `3` | hold to prime a frag / concussion grenade |
 | Numpad `*` / `/` | Spy: disguise / feign death. Engineer: `*` builds a dispenser, `/` teleporters |
 | Numpad `1`-`8` | choose a class in the menu |
 
@@ -62,6 +64,15 @@ rockets) or, once maxed, to repair and reload it (10 metal per swing). Sentries 
 sight, and can be shot, burned, blown up or clubbed down; the owner is credited with their kills. One sentry per
 engineer; resupply lockers only top metal up by 20 per visit. Bot engineers build one at their post and tend it.
 
+**Grenades:** every class carries frag grenades (Soldier, Demoman and HWGuy 4, the rest 2); Scout (3) and Medic (2)
+also carry concussion grenades. Hold `Q` (frag) or `E` (concussion) to **prime** it and release to throw; the fuse is
+3 s and it keeps burning while you hold, so you can *cook* a grenade to make it go off on landing. Cook it too long
+and it explodes in your hand; die while holding one and you drop it live. A frag does up to 110 damage in 150 units
+(half to yourself, none to teammates, blocked by walls). A concussion grenade does **no damage**: it shoves everyone in
+260 units, teammates and you included, and leaves them dizzy for up to 8 s (the view sways and shots land off
+target). Throw one at your own feet while jumping to **concussion-jump** like a Scout. Lockers refill grenades. Bots
+throw cooked frags at visible enemies at mid range (they don't use concussions yet).
+
 **Spy:** `F` starts a 2 s disguise as the next enemy class. Once it completes, enemy sentries and bots won't target you
 and enemy players see you as one of their own (class colour, name tag, radar dot). Attacking or taking damage blows it.
 The knife kills in one hit from behind (40 damage from the front) and, used on an enemy sentry, **sabotages** it: the
@@ -81,7 +92,7 @@ metal (entrance outside their spawn building, exit at the front of their half), 
 All engineer structures share one code path (`Structure`): shooting, burning, explosions (rockets and grenades
 detonate on them), melee, spy sabotage and wrench repair behave identically for sentries, dispensers and teleporters.
 
-**Not yet implemented:** concussion/hand grenades, detpacks, infection. (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
+**Not yet implemented:** detpacks, infection, caltrops and the class-specific grenades (napalm, MIRV, nail, gas, EMP). (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
 
 ## The map
 
