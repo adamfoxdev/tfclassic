@@ -32,6 +32,7 @@ sealed class Hud
         DrawScoreBar(me, w);
         DrawKillFeed(w);
         DrawFlagStatus(me, w, h);
+        DrawEngineer(me, w, h);
 
         if (!me.Alive)
         {
@@ -126,6 +127,25 @@ sealed class Hud
                 w / 2, h / 2 + 120, 24, new Color(255, 230, 90, 255));
     }
 
+    void DrawEngineer(Player me, int w, int h)
+    {
+        if (me.Class.Id != PlayerClassId.Engineer) return;
+
+        Text($"METAL {me.Metal}", 24, h - 150, 22, new Color(230, 200, 110, 255));
+        var s = game.SentryOf(me);
+        string status = s == null
+            ? $"Sentry: none  (right-click to build, {Sentry.BuildCost} metal)"
+            : s.Building
+                ? "Sentry: building..."
+                : $"Sentry: L{s.Level}  HP {MathF.Ceiling(s.Health)}/{s.MaxHealth}  ammo {s.Ammo}" + (s.Level == 3 ? $"  rockets {s.Rockets}" : "")
+                  + (s.Level < 3 ? $"   (wrench: upgrade {Sentry.UpgradeCost})" : "");
+        Text(status, 24, h - 176, 16, Color.White);
+        if (s != null) Text("right-click again to demolish", 24, h - 196, 13, Color.LightGray);
+
+        if (me.NoticeTimer > 0)
+            TextCentered(me.Notice, w / 2, h / 2 + 70, 22, new Color(255, 230, 120, 255));
+    }
+
     void DrawKillFeed(int w)
     {
         int y = 12;
@@ -173,6 +193,12 @@ sealed class Hud
             var m = Map(f.Position);
             Raylib.DrawRectangle((int)m.X - 3, (int)m.Y - 3, 7, 7, Palette.Team(f.Team));
         }
+        foreach (var s in game.Sentries)
+        {
+            if (s.Team != me.Team && !game.World.LineOfSight(me.Eye, s.Hull.Center)) continue;
+            var m = Map(s.Position);
+            Raylib.DrawRectangle((int)m.X - 2, (int)m.Y - 2, 5, 5, Palette.Shade(Palette.Team(s.Team), 1.2f));
+        }
         foreach (var p in game.Players)
         {
             if (!p.Alive) continue;
@@ -217,23 +243,23 @@ sealed class Hud
         var tc = Palette.Team(team);
         TextCentered($"Team: {team}   (press T to switch)", w / 2, 150, 26, tc);
 
-        int y = 210;
+        int y = 200;
         for (int i = 0; i < Classes.All.Length; i++)
         {
             var c = Classes.All[i];
             bool sel = c.Id == selected;
             int bx = w / 2 - 330;
-            if (sel) Raylib.DrawRectangle(bx - 10, y - 4, 660, 34, Palette.WithAlpha(tc, 110));
+            if (sel) Raylib.DrawRectangle(bx - 10, y - 4, 660, 32, Palette.WithAlpha(tc, 110));
             Text($"{i + 1}", bx, y, 22, Color.White);
             Text(c.Name, bx + 40, y, 22, Palette.ClassColor(c.Id));
             Text($"HP {c.MaxHealth}  ARM {c.MaxArmor}  SPD {c.Speed}", bx + 190, y + 3, 16, Color.LightGray);
             Text(string.Join(" / ", c.Slots.Select(s => Weapons.Get(s).Name)), bx + 410, y + 3, 14, Color.Gray);
-            y += 40;
+            y += 36;
         }
 
-        TextCentered(firstJoin ? "Press 1-7 to choose a class, ENTER to join" : "Press 1-7 to choose, ENTER to confirm (applies on respawn or in your resupply room)",
+        TextCentered(firstJoin ? "Press 1-8 to choose a class, ENTER to join" : "Press 1-8 to choose, ENTER to confirm (applies on respawn or in your resupply room)",
             w / 2, y + 20, 20, Color.White);
-        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs  -  1/2/3 weapons  -  TAB scores  -  M class menu  -  ESC quit",
+        TextCentered("WASD move  -  mouse aim  -  LMB fire  -  RMB detonate pipebombs / engineer: build sentry  -  1/2/3 weapons  -  TAB scores  -  M class menu  -  ESC quit",
             w / 2, y + 56, 16, Color.LightGray);
     }
 }

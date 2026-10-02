@@ -47,6 +47,9 @@ public sealed class Player
 
     public Flag? CarryingFlag;
     public int Frags, Deaths, Captures;
+    public int Metal;
+    public string Notice = "";
+    public float NoticeTimer;
 
     public PlayerInput Input;
 
@@ -81,6 +84,7 @@ public sealed class Projectile
     public float Age, Fuse;
     public float Damage, Splash;
     public bool Stuck, Dead;
+    public string Label = "Rocket";
 }
 
 public sealed class Flag
@@ -106,3 +110,39 @@ public sealed class Effect
 }
 
 public sealed record GameEvent(float Time, string Text, Team? Team);
+
+/// <summary>An engineer-built automatic turret. Levels 1-3; level 3 also fires rockets.</summary>
+public sealed class Sentry
+{
+    public const int BuildCost = 130;
+    public const int UpgradeCost = 100;
+
+    static readonly int[] HealthByLevel = { 150, 180, 220 };
+    static readonly int[] AmmoByLevel = { 100, 120, 150 };
+    static readonly float[] CooldownByLevel = { 0.22f, 0.11f, 0.11f };
+    static readonly float[] RangeByLevel = { 900f, 1000f, 1100f };
+    static readonly float[] TurnByLevel = { 3f, 4.5f, 6f };
+
+    public Player Owner = null!;
+    public Team Team;
+    public Vector3 Position;   // feet
+    public float Yaw;
+    public int Level = 1;
+    public float Health = 150;
+    public int Ammo = 100, Rockets;
+    public float BuildTimer = 3f;
+    public float FireCooldown, RocketCooldown, RetargetTimer;
+    public Player? Target;
+    public bool Dead;
+
+    public static readonly Vector3 HullHalf = new(14, 20, 14);
+    public Aabb Hull => Aabb.FromCenter(Position + new Vector3(0, HullHalf.Y, 0), HullHalf);
+    public Vector3 Muzzle => Position + new Vector3(0, 34, 0);
+
+    public int MaxHealth => HealthByLevel[Level - 1];
+    public int MaxAmmo => AmmoByLevel[Level - 1];
+    public float Cooldown => CooldownByLevel[Level - 1];
+    public float Range => RangeByLevel[Level - 1];
+    public float TurnRate => TurnByLevel[Level - 1];
+    public bool Building => BuildTimer > 0;
+}

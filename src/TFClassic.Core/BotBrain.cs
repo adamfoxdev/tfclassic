@@ -22,6 +22,7 @@ public sealed class BotBrain
     int lastSpawnCount = -1;
 
     Player? target;
+    Sentry? targetSentry;
     float targetTimer;
     float reactTimer;
     Vector3 aimNoise;
@@ -38,6 +39,10 @@ public sealed class BotBrain
 
     float aimYaw, aimPitch;
     bool holdingStill;
+    float buildTimer;
+    int buildFails;
+    bool triedBuild;
+    float yawOffset;
 
     public BotBrain(Game game, Player me, int seed)
     {
@@ -53,6 +58,7 @@ public sealed class BotBrain
         path.Clear();
         pathGoal = -1;
         target = null;
+        targetSentry = null;
         stuckTimer = 0;
         aimYaw = me.Yaw;
         aimPitch = 0;
@@ -73,6 +79,7 @@ public sealed class BotBrain
         int defenders = game.Bots.Count(b => b != this && b.me.Team == me.Team && b.defender);
         int wanted = Math.Max(1, teamBots / 4);
         defender = defenders < wanted && rng.NextDouble() < Math.Max(defendChance, 0.5);
+        if (me.Class.Id == PlayerClassId.Engineer) defender = true;   // engineers dig in and tend their sentry
         string[] spots = { "flagdoor", "hall", "door" };
         string side = me.Team == Team.Red ? "R_" : "B_";
         defendNode = game.Map.Nav.Find(side + spots[rng.Next(spots.Length)]);
@@ -96,13 +103,13 @@ public sealed class BotBrain
 
         // Aim: at the target if we have one, otherwise where we're walking.
         float desiredYaw = me.Yaw, desiredPitch = 0f;
-        bool engaging = target != null && target.Alive;
+        bool engaging = HasTarget;
         float distToTarget = 0f;
         WeaponDef weapon = me.Weapon;
 
         if (engaging)
         {
-            distToTarget = Vector3.Distance(me.Eye, target!.Center);
+            distToTarget = Vector3.Distance(me.Eye, TargetCenter);
             int slot = ChooseSlot(distToTarget);
             if (slot != me.Slot) input.SelectSlot = slot;
             weapon = Weapons.Get(me.Class.Slots[slot]);
@@ -113,7 +120,7 @@ public sealed class BotBrain
                 noiseTimer = 0.3f;
                 aimNoise = new Vector3(Rand(), Rand(), Rand()) * accuracy * 1.8f * distToTarget;
             }
-            var aimPoint = AimPoint(target!, weapon, distToTarget) + aimNoise;
+            var aimPoint = AimPoint(weapon, distToTarget) + aimNoise;
             var d = aimPoint - me.Eye;
             desiredYaw = MathF.Atan2(d.X, d.Z);
             float horiz = MathF.Sqrt(d.X * d.X + d.Z * d.Z);
@@ -152,7 +159,7 @@ public sealed class BotBrain
             bool inRange = weapon.Mode switch
             {
                 FireMode.Flame => distToTarget < weapon.Range,
-                FireMode.Melee or FireMode.Heal => distToTarget < weapon.Range + 24,
+                FireMode.Melee or FireMode.Heal or FireMode.Wrench => distToTarget < weapon.Range + 24,
                 FireMode.Rocket or FireMode.Grenade or FireMode.Pipe => distToTarget < 1600,
                 _ => distToTarget < 2400,
             };
@@ -186,22 +193,79 @@ public sealed class BotBrain
             }
         }
 
+        if (me.Class.Id == PlayerClassId.Engineer) EngineerTick(dt, wantMove, engaging, ref input);
         UpdateStuck(dt, wantMove && !holdingStill, ref input);
         me.Input = input;
+    }
+
+    /// <summary>Build a sentry at the post, then keep upgrading and repairing it with the wrench.</summary>
+    void EngineerTick(float dt, bool wantMove, bool engaging, ref PlayerInput input)
+    {
+        if (wantMove || engaging) return;
+        var sentry = game.SentryOf(me);
+
+        if (sentry == null)
+        {
+            if (triedBuild)
+            {
+                // The last attempt didn't produce a sentry: turn and try another direction.
+                triedBuild = false;
+                if (me.Metal >= Sentry.BuildCost) { buildFails++; yawOffset += 1.1f; }
+            }
+            buildTimer -= dt;
+            if (buildTimer > 0 || me.Metal < Sentry.BuildCost) return;
+            buildTimer = 1.0f;
+            aimYaw += yawOffset;
+            yawOffset = 0;
+            input.Yaw = aimYaw;
+            input.Pitch = 0;
+            input.AltFire = !me.PrevAlt;     // needs a fresh press
+            triedBuild = true;
+            return;
+        }
+        triedBuild = false;
+        buildFails = 0;
+
+        bool needsWork = (sentry.Level < 3 && me.Metal >= Sentry.UpgradeCost)
+            || ((sentry.Health < sentry.MaxHealth || sentry.Ammo < sentry.MaxAmmo) && me.Metal >= 10);
+        if (!needsWork) return;
+
+        var to = sentry.Hull.Center - me.Eye;
+        aimYaw = MathF.Atan2(to.X, to.Z);
+        aimPitch = MathF.Atan2(to.Y, MathF.Sqrt(to.X * to.X + to.Z * to.Z));
+        input.Yaw = aimYaw;
+        input.Pitch = aimPitch;
+        if (me.Slot != 0) input.SelectSlot = 0;
+        float dist = to.Length();
+        if (dist > 70f)
+        {
+            input.Forward = 1f;      // walk up to it
+        }
+        else
+        {
+            input.Fire = true;
+            holdingStill = true;
+        }
     }
 
     float Rand() => (float)(rng.NextDouble() * 2 - 1);
 
     // ───────────── target selection ─────────────
 
+    bool HasTarget => (target != null && target.Alive) || (targetSentry != null && !targetSentry.Dead);
+
+    Vector3 TargetCenter => target != null && target.Alive ? target.Center : targetSentry!.Hull.Center;
+
     void UpdateTarget(float dt)
     {
         targetTimer -= dt;
         if (target != null && !target.Alive) target = null;
+        if (targetSentry != null && targetSentry.Dead) targetSentry = null;
         if (targetTimer > 0) return;
         targetTimer = 0.25f;
 
         Player? best = null;
+        Sentry? bestSentry = null;
         float bestD = me.Class.Id == PlayerClassId.Sniper ? 2500f : 1200f;
         foreach (var q in game.Players)
         {
@@ -212,9 +276,21 @@ public sealed class BotBrain
             best = q;
             bestD = d;
         }
+        foreach (var s in game.Sentries)
+        {
+            if (s.Dead || s.Team == me.Team) continue;
+            float d = Vector3.Distance(me.Eye, s.Hull.Center);
+            if (d >= bestD) continue;
+            if (!game.World.LineOfSight(me.Eye, s.Hull.Center)) continue;
+            bestSentry = s;
+            best = null;
+            bestD = d;
+        }
 
-        if (best != null && best != target) reactTimer = 0.25f + (float)rng.NextDouble() * 0.35f;
+        bool changed = best != target || bestSentry != targetSentry;
+        if (changed && (best != null || bestSentry != null)) reactTimer = 0.25f + (float)rng.NextDouble() * 0.35f;
         target = best;
+        targetSentry = bestSentry;
     }
 
     int ChooseSlot(float dist)
@@ -253,8 +329,12 @@ public sealed class BotBrain
         return w.Ammo == AmmoType.None || me.Ammo[(int)w.Ammo] >= w.AmmoPerShot;
     }
 
-    Vector3 AimPoint(Player t, WeaponDef w, float dist)
+    Vector3 AimPoint(WeaponDef w, float dist)
     {
+        if (target == null || !target.Alive)
+            return TargetCenter;   // sentries don't move; aim at the middle
+
+        var t = target;
         switch (w.Mode)
         {
             case FireMode.Rocket:
@@ -385,18 +465,7 @@ public sealed class BotBrain
 
     // ───────────── angle helpers ─────────────
 
-    static float AngleDiff(float a, float b)
-    {
-        float d = (b - a) % (2 * MathF.PI);
-        if (d > MathF.PI) d -= 2 * MathF.PI;
-        if (d < -MathF.PI) d += 2 * MathF.PI;
-        return d;
-    }
+    static float AngleDiff(float a, float b) => Angles.Diff(a, b);
 
-    static float ApproachAngle(float cur, float des, float maxStep)
-    {
-        float d = AngleDiff(cur, des);
-        if (MathF.Abs(d) <= maxStep) return des;
-        return cur + MathF.Sign(d) * maxStep;
-    }
+    static float ApproachAngle(float cur, float des, float maxStep) => Angles.Approach(cur, des, maxStep);
 }

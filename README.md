@@ -1,7 +1,7 @@
 # TF Classic (C#)
 
 A Team Fortress Classic–style capture-the-flag game in C# / .NET 8, with **one map** (`2fort_lite`),
-seven classes and bots to play against. Single player; no networking.
+eight classes and bots to play against. Single player; no networking.
 
 ## Run it
 
@@ -23,7 +23,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Mouse | aim |
 | `Space` | jump |
 | Left mouse | fire (sniper: hold to charge, release to shoot) |
-| Right mouse | detonate your pipebombs (Demoman) |
+| Right mouse | Demoman: detonate pipebombs. Engineer: build a sentry (again to demolish it) |
 | `1` `2` `3` / wheel | switch weapon |
 | `Tab` | scoreboard |
 | `M` | class menu (applies on respawn, or instantly in your own resupply room) |
@@ -39,9 +39,15 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 ### Classes
 
 Scout, Soldier (rocket jumping works), Demoman (grenade launcher + sticky pipebombs), HWGuy, Sniper (charged
-shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning).
-**Not yet implemented:** Spy and Engineer (they need disguise/sentry-gun systems), concussion grenades,
-detpacks, infection.
+shots, headshots), Medic (medikit heals teammates), Pyro (flamethrower, burning), Engineer (sentry gun).
+
+**Engineer / sentry gun:** right-click builds a sentry about 56 units in front of you for 130 metal (it takes 3 s to
+come online). Hit your own sentry with the wrench to upgrade it (100 metal per level, up to level 3 which adds
+rockets) or, once maxed, to repair and reload it (10 metal per swing). Sentries only shoot enemies, need line of
+sight, and can be shot, burned, blown up or clubbed down; the owner is credited with their kills. One sentry per
+engineer; resupply lockers only top metal up by 20 per visit. Bot engineers build one at their post and tend it.
+
+**Not yet implemented:** Spy (disguise/backstab), dispenser and teleporters, concussion grenades, detpacks, infection.
 
 ## The map
 

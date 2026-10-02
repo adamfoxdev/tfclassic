@@ -63,7 +63,7 @@ sealed class Client
     }
 
     /// <summary>Runs the sim for a while with the human idle, then saves a frame and exits.</summary>
-    public int RunScreenshot(string path, float warmupSeconds, float[]? at)
+    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false)
     {
         me.Input = new PlayerInput { SelectSlot = -1, Yaw = me.Yaw };
         for (float t = 0; t < warmupSeconds; t += Dt)
@@ -79,6 +79,16 @@ sealed class Client
             pitch = at[4] * MathF.PI / 180f;
             me.Yaw = yaw;
             me.Pitch = pitch;
+        }
+        if (buildSentry)
+        {
+            // Debug aid: engineer builds a sentry, then it is bumped to level 3 for a look at the model.
+            me.Input = new PlayerInput { SelectSlot = -1, Yaw = yaw, Pitch = pitch, AltFire = true };
+            game.Tick(Dt);
+            me.Input.AltFire = false;
+            for (int i = 0; i < 200; i++) game.Tick(Dt);
+            var s = game.SentryOf(me);
+            if (s != null) { s.Level = 3; s.Health = s.MaxHealth * 0.6f; }
         }
         for (int i = 0; i < 3; i++) Render();   // let the window/GL settle
         var image = Raylib.LoadImageFromScreen();

@@ -37,6 +37,7 @@ static class Palette
         PlayerClassId.Sniper => new Color(60, 130, 120, 255),
         PlayerClassId.Medic => new Color(240, 240, 240, 255),
         PlayerClassId.Pyro => new Color(240, 130, 40, 255),
+        PlayerClassId.Engineer => new Color(235, 190, 60, 255),
         _ => Color.White,
     };
 

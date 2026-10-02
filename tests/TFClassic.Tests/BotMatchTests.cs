@@ -8,13 +8,16 @@ namespace TFClassic.Tests;
 
 public class BotMatchTests(ITestOutputHelper output)
 {
-    static Game BotGame(int seed, int perTeam)
+    /// <summary>Bots with classes drawn from a fixed pool (Engineers optional, since sentries change the balance a lot).</summary>
+    static Game BotGame(int seed, int perTeam, bool engineers = false)
     {
         var g = NewGame(seed);
+        var rng = new Random(seed * 31);
+        int pool = engineers ? Classes.All.Length : Classes.All.Length - 1;   // Engineer is last
         for (int i = 0; i < perTeam; i++)
         {
-            g.AddBot(Team.Red);
-            g.AddBot(Team.Blue);
+            g.AddBot(Team.Red, (PlayerClassId)rng.Next(pool));
+            g.AddBot(Team.Blue, (PlayerClassId)rng.Next(pool));
         }
         return g;
     }
@@ -63,5 +66,28 @@ public class BotMatchTests(ITestOutputHelper output)
         Run(g, 600);
         output.WriteLine($"stuck resets in 10 minutes with 12 bots: {g.BotStuckResets}");
         Assert.True(g.BotStuckResets <= 2, $"bots got stuck {g.BotStuckResets} times");
+    }
+
+    [Fact]
+    public void MatchesWithEngineersBuildSentriesAndStayStable()
+    {
+        var g = NewGame(3);
+        var eng = new[] { g.AddBot(Team.Red, PlayerClassId.Engineer), g.AddBot(Team.Blue, PlayerClassId.Engineer) };
+        for (int i = 0; i < 4; i++)
+        {
+            g.AddBot(Team.Red, PlayerClassId.Soldier);
+            g.AddBot(Team.Blue, PlayerClassId.Scout);
+        }
+        var seen = new HashSet<Sentry>();
+        for (int i = 0; i < 60 * 300; i++)
+        {
+            g.Tick(Dt);
+            foreach (var s in g.Sentries) seen.Add(s);
+            foreach (var p in g.Players)
+                Assert.False(float.IsNaN(p.Position.X + p.Position.Y + p.Position.Z), "NaN position");
+        }
+        output.WriteLine($"sentries built: {seen.Count}, resets: {g.BotStuckResets}");
+        Assert.True(seen.Count >= 2, "both engineers should have built at least one sentry");
+        Assert.True(g.BotStuckResets <= 2);
     }
 }

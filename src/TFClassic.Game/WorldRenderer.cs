@@ -20,6 +20,7 @@ sealed class WorldRenderer
         foreach (var p in game.Players)
             if (p.Alive && (p != viewer)) DrawPlayer(p, viewer);
 
+        DrawSentries();
         DrawFlags(time);
         DrawProjectiles();
         DrawEffects();
@@ -55,6 +56,51 @@ sealed class WorldRenderer
         Draw3D.Box(new Vector3(-16, 36, 2), new Vector3(-9, 44, 34), Palette.Shade(new Color(45, 45, 50, 255), blink), true);   // weapon
 
         Rlgl.PopMatrix();
+    }
+
+    void DrawSentries()
+    {
+        foreach (var s in game.Sentries)
+        {
+            var team = Palette.Team(s.Team);
+            float grow = s.Building ? 0.35f + 0.65f * (1f - s.BuildTimer / 3f) : 1f;
+            var metal = new Color(110, 112, 120, 255);
+            var dark = new Color(48, 50, 56, 255);
+
+            Rlgl.PushMatrix();
+            Rlgl.Translatef(s.Position.X, s.Position.Y, s.Position.Z);
+
+            Draw3D.Box(new Vector3(-18, 0, -18), new Vector3(18, 8 * grow, 18), Palette.Shade(team, 0.85f), true);   // base plate
+            Draw3D.Box(new Vector3(-3, 8, -3), new Vector3(3, 24 * grow, 3), metal, true);                           // post
+
+            Rlgl.Rotatef(s.Yaw * (180f / MathF.PI), 0, 1, 0);
+            float top = 24 * grow;
+            Draw3D.Box(new Vector3(-9, top - 4, -9), new Vector3(9, top + 12, 9), s.Building ? Palette.Shade(metal, 0.7f) : metal, true);   // turret body
+            if (!s.Building)
+            {
+                Draw3D.Box(new Vector3(-9, top + 4, -9), new Vector3(9, top + 8, 9), team, true);                     // team stripe
+                if (s.Level == 1)
+                    Draw3D.Box(new Vector3(-2, top + 2, 9), new Vector3(2, top + 6, 30), dark, true);
+                else
+                {
+                    Draw3D.Box(new Vector3(-6, top + 2, 9), new Vector3(-2, top + 6, 30), dark, true);
+                    Draw3D.Box(new Vector3(2, top + 2, 9), new Vector3(6, top + 6, 30), dark, true);
+                }
+                if (s.Level == 3)
+                {
+                    Draw3D.Box(new Vector3(-16, top + 4, -4), new Vector3(-9, top + 14, 12), dark, true);              // rocket pods
+                    Draw3D.Box(new Vector3(9, top + 4, -4), new Vector3(16, top + 14, 12), dark, true);
+                }
+            }
+            Rlgl.PopMatrix();
+
+            // Health bar above the turret, visible to everyone.
+            float frac = Math.Clamp(s.Health / s.MaxHealth, 0f, 1f);
+            var barPos = s.Position + new Vector3(0, 52, 0);
+            Raylib.DrawCubeV(barPos, new Vector3(26, 2, 2), new Color(30, 30, 30, 200));
+            Raylib.DrawCubeV(barPos + new Vector3(-13 * (1 - frac), 0, 0), new Vector3(26 * frac, 3, 3),
+                frac > 0.5f ? new Color(90, 230, 90, 255) : new Color(240, 90, 70, 255));
+        }
     }
 
     void DrawFlags(float time)
