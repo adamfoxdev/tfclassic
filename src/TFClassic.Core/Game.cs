@@ -16,6 +16,7 @@ public sealed class Game
     public List<Dispenser> Dispensers { get; } = new();
     public List<Teleporter> Teleporters { get; } = new();
     public List<Detpack> Detpacks { get; } = new();
+    public List<FirePatch> FirePatches { get; } = new();
 
     /// <summary>Every engineer-built structure currently in the world.</summary>
     public IEnumerable<Structure> Structures => Sentries.Cast<Structure>().Concat(Dispensers).Concat(Teleporters).Concat(Detpacks);
@@ -107,7 +108,7 @@ public sealed class Game
         p.ResupplyCooldown = 0;
         p.CarryingFlag = null;
         p.Grenades[0] = p.Class.Frag;
-        p.Grenades[1] = p.Class.Concussion;
+        p.Grenades[1] = p.Class.Secondary;
         p.Detpacks = p.Class.Detpacks;
         p.InfectedBy = null;
         p.Primed = -1;
@@ -140,6 +141,7 @@ public sealed class Game
         UpdateDispensers(dt);
         UpdateTeleporters(dt);
         UpdateDetpacks(dt);
+        UpdateFirePatches(dt);
         UpdateProjectiles(dt);
         UpdateFlags(dt);
         UpdateEffects(dt);
@@ -216,7 +218,7 @@ public sealed class Game
     void Resupply(Player p)
     {
         bool changed = p.Health < p.Class.MaxHealth || p.Armor < p.Class.MaxArmor || p.Metal < p.Class.MaxMetal
-                       || p.Grenades[0] < p.Class.Frag || p.Grenades[1] < p.Class.Concussion
+                       || p.Grenades[0] < p.Class.Frag || p.Grenades[1] < p.Class.Secondary
                        || p.Detpacks < p.Class.Detpacks || p.IsInfected;
         for (int i = 1; i < p.Ammo.Length; i++)
             if (p.Ammo[i] < p.Class.MaxAmmo[i]) changed = true;
@@ -226,7 +228,7 @@ public sealed class Game
         p.InfectedBy = null;                                   // the locker's disinfectant
         p.Metal = Math.Min(p.Class.MaxMetal, p.Metal + 20);   // lockers only top metal up a little
         p.Grenades[0] = p.Class.Frag;
-        p.Grenades[1] = p.Class.Concussion;
+        p.Grenades[1] = p.Class.Secondary;
         p.Detpacks = p.Class.Detpacks;
         for (int i = 0; i < p.Ammo.Length; i++) p.Ammo[i] = p.Class.MaxAmmo[i];
         p.ResupplyCooldown = 3f;
@@ -543,6 +545,7 @@ public sealed class Game
                 case ProjectileKind.Pipe:
                 case ProjectileKind.HandGrenade:
                 case ProjectileKind.Concussion:
+                case ProjectileKind.Napalm:
                     UpdateBouncer(pr, dt);
                     break;
             }
@@ -827,14 +830,14 @@ public sealed class Game
         {
             if (!p.Feigning && !MatchOver)
             {
-                if (g1 && !p.PrevGrenade1 && p.Grenades[0] > 0) Prime(p, GrenadeKind.Frag);
-                else if (g2 && !p.PrevGrenade2 && p.Grenades[1] > 0) Prime(p, GrenadeKind.Concussion);
+                if (g1 && !p.PrevGrenade1 && p.Grenades[0] > 0) Prime(p, 0);
+                else if (g2 && !p.PrevGrenade2 && p.Grenades[1] > 0) Prime(p, 1);
             }
         }
         else
         {
             p.PrimedTimer -= dt;
-            bool held = p.Primed == (int)GrenadeKind.Frag ? g1 : g2;
+            bool held = p.Primed == 0 ? g1 : g2;
             if (p.PrimedTimer <= 0) ThrowGrenade(p, inHand: true);
             else if (!held) ThrowGrenade(p);
         }
@@ -842,28 +845,33 @@ public sealed class Game
         p.PrevGrenade2 = g2;
     }
 
-    void Prime(Player p, GrenadeKind kind)
+    void Prime(Player p, int slot)
     {
-        p.Primed = (int)kind;
+        p.Primed = slot;
         p.PrimedTimer = GrenadeFuse;
-        p.Grenades[(int)kind]--;
+        p.Grenades[slot]--;
         BreakDisguise(p);
     }
 
     /// <summary>Throws (or drops, or detonates in the hand) the grenade the player is cooking.</summary>
     void ThrowGrenade(Player p, bool dropped = false, bool inHand = false)
     {
-        var kind = (GrenadeKind)p.Primed;
+        var kind = p.Class.GrenadeKindOf(p.Primed);
         float fuse = MathF.Max(0.05f, p.PrimedTimer);
         p.Primed = -1;
 
         var pr = new Projectile
         {
-            Kind = kind == GrenadeKind.Frag ? ProjectileKind.HandGrenade : ProjectileKind.Concussion,
+            Kind = kind switch
+            {
+                GrenadeKind.Frag => ProjectileKind.HandGrenade,
+                GrenadeKind.Concussion => ProjectileKind.Concussion,
+                _ => ProjectileKind.Napalm,
+            },
             Owner = p,
             Team = p.Team,
-            Damage = kind == GrenadeKind.Frag ? FragDamage : 0f,
-            Splash = kind == GrenadeKind.Frag ? FragRadius : ConcussionRadius,
+            Damage = kind == GrenadeKind.Frag ? FragDamage : kind == GrenadeKind.Napalm ? NapalmBurst : 0f,
+            Splash = kind switch { GrenadeKind.Frag => FragRadius, GrenadeKind.Concussion => ConcussionRadius, _ => FirePatch.Radius },
             Fuse = fuse,
         };
 
@@ -900,10 +908,71 @@ public sealed class Game
             case ProjectileKind.HandGrenade:
                 Explode(pr.Position, pr.Owner, pr.Damage, pr.Splash, "Hand Grenade");
                 break;
+            case ProjectileKind.Napalm:
+                ExplodeNapalm(pr.Position, pr.Owner, pr.Damage);
+                break;
             default:
                 Explode(pr.Position, pr.Owner, pr.Damage, pr.Splash, "Grenade");
                 break;
         }
+    }
+
+    const float NapalmBurst = 20f;
+
+    /// <summary>A fireball that lights everyone close by, then burns on as a patch of flames on the floor.</summary>
+    void ExplodeNapalm(Vector3 pos, Player owner, float burst)
+    {
+        // Small initial blast: ignites and hurts enemies right there (the fire patch does the lasting damage).
+        Effects.Add(new Effect { Kind = EffectKind.Explosion, A = pos, Life = 0.4f, MaxLife = 0.4f, Radius = FirePatch.Radius * 0.8f });
+        foreach (var q in Players)
+        {
+            if (!q.Alive || q.Team == owner.Team) continue;
+            if (q.Hull.DistanceTo(pos) >= FirePatch.Radius * 0.8f || !World.LineOfSight(pos, q.Center)) continue;
+            q.BurnTime = 5f;
+            q.BurnOwner = owner;
+            Damage(q, owner, burst, "Napalm", Vector3.Zero);
+        }
+
+        // Settle the flames on the floor below (flames don't burn on water).
+        Vector3 floor = pos;
+        if (World.Raycast(pos + new Vector3(0, 8, 0), pos + new Vector3(0, -140, 0), out float t, out _))
+            floor = pos + new Vector3(0, 8 - 148 * t, 0);
+        if (World.InZone(ZoneKind.Water, floor + new Vector3(0, 6, 0))) return;
+
+        FirePatches.Add(new FirePatch { Owner = owner, Team = owner.Team, Position = floor });
+    }
+
+    void UpdateFirePatches(float dt)
+    {
+        foreach (var f in FirePatches)
+        {
+            f.Life -= dt;
+            if (f.Life <= 0) continue;
+            f.Tick -= dt;
+            if (f.Tick > 0) continue;
+            f.Tick = FirePatch.TickInterval;
+
+            var source = f.Position + new Vector3(0, 14, 0);
+            foreach (var q in Players)
+            {
+                if (!q.Alive || q.Team == f.Team) continue;
+                float dx = q.Position.X - f.Position.X, dz = q.Position.Z - f.Position.Z;
+                if (dx * dx + dz * dz > FirePatch.Radius * FirePatch.Radius || MathF.Abs(q.Position.Y - f.Position.Y) > 70f) continue;
+                if (!World.LineOfSight(source, q.Center) && !World.LineOfSight(source, q.Position + new Vector3(0, 10, 0))) continue;
+                q.BurnTime = MathF.Max(q.BurnTime, 4f);
+                q.BurnOwner = f.Owner;
+                Damage(q, f.Owner, FirePatch.TickDamage, "Napalm", Vector3.Zero);
+            }
+
+            foreach (var s in Structures.ToArray())
+            {
+                if (s.Dead || s.Team == f.Team) continue;
+                float dx = s.Position.X - f.Position.X, dz = s.Position.Z - f.Position.Z;
+                if (dx * dx + dz * dz > FirePatch.Radius * FirePatch.Radius || MathF.Abs(s.Position.Y - f.Position.Y) > 70f) continue;
+                DamageStructure(s, f.Owner, FirePatch.StructureTickDamage, "Napalm");
+            }
+        }
+        FirePatches.RemoveAll(f => f.Life <= 0);
     }
 
     /// <summary>No damage: shoves everyone nearby (teammates and the thrower too) and leaves them dizzy.</summary>
@@ -1519,6 +1588,7 @@ public sealed class Game
         Dispensers.Clear();
         Teleporters.Clear();
         Detpacks.Clear();
+        FirePatches.Clear();
         foreach (var p in Players) Respawn(p);
     }
 

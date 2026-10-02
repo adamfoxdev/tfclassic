@@ -16,7 +16,7 @@ public enum WeaponId
     AssaultCannon, SniperRifle, AutoRifle, Flamethrower, Wrench, Knife, Tranquilizer,
 }
 
-public enum GrenadeKind { Frag = 0, Concussion = 1 }
+public enum GrenadeKind { Frag = 0, Concussion = 1, Napalm = 2 }
 
 public enum FireMode { Melee, Heal, Wrench, Backstab, Tranq, Hitscan, Rocket, Grenade, Pipe, Flame, SniperCharge }
 
@@ -57,8 +57,13 @@ public sealed record ClassDef(
     int[] MaxAmmo /* indexed by AmmoType */,
     int MaxMetal = 0,
     int Frag = 2,
-    int Concussion = 0,
-    int Detpacks = 0);
+    int Secondary = 0,
+    int Detpacks = 0,
+    GrenadeKind SecondaryKind = GrenadeKind.Concussion)
+{
+    /// <summary>Grenade slot 0 is always frag; slot 1 is this class's special grenade.</summary>
+    public GrenadeKind GrenadeKindOf(int slot) => slot == 0 ? GrenadeKind.Frag : SecondaryKind;
+}
 
 public static class Classes
 {
@@ -66,7 +71,7 @@ public static class Classes
     public static readonly ClassDef[] All =
     {
         new(PlayerClassId.Scout, "Scout", 75, 50, 25, 400,
-            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.Nailgun }, 2, new[] { 0, 50, 200, 0, 0 }, Concussion: 3),
+            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.Nailgun }, 2, new[] { 0, 50, 200, 0, 0 }, Secondary: 3),
         new(PlayerClassId.Soldier, "Soldier", 100, 200, 100, 240,
             new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.RocketLauncher }, 2, new[] { 0, 100, 0, 50, 0 }, Frag: 4),
         new(PlayerClassId.Demoman, "Demoman", 90, 120, 50, 280,
@@ -76,9 +81,9 @@ public static class Classes
         new(PlayerClassId.Sniper, "Sniper", 90, 50, 0, 250,
             new[] { WeaponId.Crowbar, WeaponId.SniperRifle, WeaponId.AutoRifle }, 1, new[] { 0, 75, 0, 0, 0 }),
         new(PlayerClassId.Medic, "Medic", 90, 100, 50, 320,
-            new[] { WeaponId.Medikit, WeaponId.Shotgun, WeaponId.SuperNailgun }, 2, new[] { 0, 75, 150, 0, 0 }, Concussion: 2),
+            new[] { WeaponId.Medikit, WeaponId.Shotgun, WeaponId.SuperNailgun }, 2, new[] { 0, 75, 150, 0, 0 }, Secondary: 2),
         new(PlayerClassId.Pyro, "Pyro", 100, 150, 50, 300,
-            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.Flamethrower }, 2, new[] { 0, 40, 0, 0, 200 }),
+            new[] { WeaponId.Crowbar, WeaponId.Shotgun, WeaponId.Flamethrower }, 2, new[] { 0, 40, 0, 0, 200 }, Secondary: 2, SecondaryKind: GrenadeKind.Napalm),
         new(PlayerClassId.Engineer, "Engineer", 80, 50, 25, 300,
             new[] { WeaponId.Wrench, WeaponId.Shotgun, WeaponId.Nailgun }, 1, new[] { 0, 50, 100, 0, 0 }, MaxMetal: 200),
         new(PlayerClassId.Spy, "Spy", 90, 100, 25, 300,

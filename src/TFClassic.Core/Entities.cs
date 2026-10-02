@@ -71,7 +71,7 @@ public sealed class Player
     public int Detpacks;
     public int DetpackFuseIndex = 1;   // index into Detpack.Fuses (default 20 s)
 
-    // Hand grenades: [0] frag, [1] concussion. Primed = -1 when nothing is being cooked.
+    // Hand grenades: [0] frag, [1] the class's special grenade. Primed = the slot being cooked, -1 when none.
     public int[] Grenades = new int[2];
     public int Primed = -1;
     public float PrimedTimer;
@@ -110,7 +110,7 @@ public sealed class Player
     public Vector3 Right => new(-MathF.Cos(Yaw), 0, MathF.Sin(Yaw));
 }
 
-public enum ProjectileKind { Rocket, Grenade, Pipe, HandGrenade, Concussion }
+public enum ProjectileKind { Rocket, Grenade, Pipe, HandGrenade, Concussion, Napalm }
 
 public sealed class Projectile
 {
@@ -263,4 +263,16 @@ public sealed class Detpack : Structure
     public static readonly Vector3 HullHalf = new(12, 8, 12);
     protected override Vector3 Half => HullHalf;
     public override string Label => "detpack";
+}
+
+/// <summary>Burning ground left by a napalm grenade: ignites and damages enemies who stand in it.</summary>
+public sealed class FirePatch
+{
+    public const float Radius = 150f, Duration = 8f, TickInterval = 0.5f, TickDamage = 8f, StructureTickDamage = 6f;
+
+    public Player Owner = null!;
+    public Team Team;
+    public Vector3 Position;
+    public float Life = Duration;
+    public float Tick;
 }

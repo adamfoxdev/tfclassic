@@ -149,12 +149,12 @@ sealed class Hud
     void DrawGrenades(Player me, int w, int h)
     {
         string text = $"Q frag x{me.Grenades[0]}";
-        if (me.Class.Concussion > 0) text += $"   E concussion x{me.Grenades[1]}";
+        if (me.Class.Secondary > 0) text += $"   E {me.Class.SecondaryKind.ToString().ToLowerInvariant()} x{me.Grenades[1]}";
         Text(text, w - 250, h - 140, 14, Color.LightGray);
 
         if (me.Alive && me.Primed >= 0)
         {
-            string kind = me.Primed == (int)GrenadeKind.Frag ? "FRAG" : "CONCUSSION";
+            string kind = me.Class.GrenadeKindOf(me.Primed).ToString().ToUpperInvariant();
             float frac = Math.Clamp(me.PrimedTimer / 3f, 0f, 1f);
             int bw = 220, bx = w / 2 - bw / 2, by = h / 2 + 60;
             Raylib.DrawRectangle(bx, by, bw, 12, new Color(0, 0, 0, 160));

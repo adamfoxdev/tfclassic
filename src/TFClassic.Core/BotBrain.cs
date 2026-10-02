@@ -48,6 +48,7 @@ public sealed class BotBrain
     float healScanTimer;
     float detpackRetreat;
     bool grenadeThrowing;
+    int grenadeSlot;
     float grenadeHold, grenadeCooldown;
     bool teleCommit, useTele;
     float teleTimer;
@@ -233,7 +234,7 @@ public sealed class BotBrain
         if (grenadeThrowing)
         {
             grenadeHold -= dt;
-            input.Grenade1 = grenadeHold > 0f;
+            if (grenadeSlot == 1) input.Grenade2 = grenadeHold > 0f; else input.Grenade1 = grenadeHold > 0f;
             if (grenadeHold <= 0f)
             {
                 grenadeThrowing = false;
@@ -243,13 +244,16 @@ public sealed class BotBrain
             return;
         }
 
-        if (!engaging || grenadeCooldown > 0f || me.Grenades[0] <= 0 || me.Primed >= 0) return;
+        // Pyros prefer their napalm; everyone else lobs frags (concussions are left for jumping).
+        int slot = me.Class.SecondaryKind == GrenadeKind.Napalm && me.Grenades[1] > 0 ? 1 : 0;
+        if (!engaging || grenadeCooldown > 0f || me.Grenades[slot] <= 0 || me.Primed >= 0) return;
         if (dist < 220f || dist > 700f || reactTimer > 0f || holdingStill) return;
         if (me.Class.Id == PlayerClassId.Spy && me.DisguiseTeam.HasValue) return;   // keep the disguise
 
         grenadeThrowing = true;
+        grenadeSlot = slot;
         grenadeHold = Math.Clamp(2.5f - dist / 450f, 0.5f, 2.2f);
-        input.Grenade1 = true;
+        if (slot == 1) input.Grenade2 = true; else input.Grenade1 = true;
         AimLob(dist, ref input);
     }
 

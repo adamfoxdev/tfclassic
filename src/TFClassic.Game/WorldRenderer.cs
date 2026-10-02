@@ -24,6 +24,7 @@ sealed class WorldRenderer
         DrawDispensers();
         DrawTeleporters();
         DrawDetpacks();
+        DrawFirePatches();
         DrawFlags(time);
         DrawProjectiles();
         DrawEffects();
@@ -215,6 +216,31 @@ sealed class WorldRenderer
         }
     }
 
+    /// <summary>Napalm fire: a scorched, glowing floor with flames licking up from random spots.</summary>
+    void DrawFirePatches()
+    {
+        foreach (var f in game.FirePatches)
+        {
+            float fade = Math.Clamp(f.Life / 1.5f, 0f, 1f);                // gutters out over the last 1.5 s
+            Raylib.DrawCubeV(f.Position + new Vector3(0, 0.6f, 0), new Vector3(FirePatch.Radius * 1.7f, 1f, FirePatch.Radius * 1.7f),
+                new Color(60, 25, 10, (int)(150 * fade)));
+
+            for (int i = 0; i < 14; i++)
+            {
+                float seed = i * 12.9898f;
+                float a = (seed * 7.1f) % 6.283f;
+                float rad = FirePatch.Radius * 0.85f * ((seed * 3.7f) % 1f + 0.05f);
+                float flick = 0.5f + 0.5f * MathF.Sin(game.Time * (7f + i % 5) + seed);
+                float height = (14f + 26f * flick) * fade;
+                var basePos = f.Position + new Vector3(MathF.Cos(a) * rad, 0, MathF.Sin(a) * rad);
+                Raylib.DrawCubeV(basePos + new Vector3(0, height * 0.5f, 0), new Vector3(16, height, 16),
+                    new Color(255, (int)(90 + 120 * flick), 30, (int)(200 * fade)));
+                Raylib.DrawCubeV(basePos + new Vector3(0, height * 0.35f, 0), new Vector3(8, height * 0.7f, 8),
+                    new Color(255, 230, 120, (int)(220 * fade)));
+            }
+        }
+    }
+
     void DrawDetpacks()
     {
         foreach (var d in game.Detpacks)
@@ -290,11 +316,13 @@ sealed class WorldRenderer
                     break;
                 case ProjectileKind.HandGrenade:
                 case ProjectileKind.Concussion:
+                case ProjectileKind.Napalm:
                 {
                     // Flashes faster as the fuse runs down.
                     float left = pr.Fuse - pr.Age;
                     bool flash = left < 1f && ((int)(left * (left < 0.4f ? 14 : 7)) % 2 == 0);
-                    var body = pr.Kind == ProjectileKind.HandGrenade ? new Color(60, 100, 60, 255) : new Color(90, 190, 230, 255);
+                    var body = pr.Kind == ProjectileKind.HandGrenade ? new Color(60, 100, 60, 255)
+                        : pr.Kind == ProjectileKind.Napalm ? new Color(235, 130, 40, 255) : new Color(90, 190, 230, 255);
                     Raylib.DrawSphere(pr.Position, 4.5f, flash ? new Color(255, 80, 60, 255) : body);
                     break;
                 }

@@ -26,7 +26,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Right mouse | Demoman: detonate pipebombs. Engineer: build a sentry (again to demolish it) |
 | `1` `2` `3` / wheel | switch weapon |
 | `V` / `C` | Demoman: set a detpack / cycle its fuse (5, 20, 50 s) |
-| `Q` / `E` | hold to prime a frag / concussion grenade (cook it), release to throw |
+| `Q` / `E` | hold to prime a frag / special grenade (concussion, or napalm for the Pyro), release to throw |
 | `Tab` | scoreboard |
 | `F` / `G` | Spy: cycle disguise as an enemy class / feign death |
 | `B` | Engineer: build a dispenser (again to demolish it) |
@@ -43,7 +43,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | Numpad `0` | fire (hold; sniper charges while held) |
 | Numpad `Enter` or `.` | alt-fire (detonate pipebombs, build/demolish sentry) |
 | Numpad `+` / `-` | next / previous weapon |
-| Numpad `1` / `3` | hold to prime a frag / concussion grenade |
+| Numpad `1` / `3` | hold to prime a frag / special grenade |
 | Numpad `*` / `/` | Spy: disguise / feign death. Engineer: `*` dispenser, `/` teleporters. Demoman: `*` detpack, `/` fuse |
 | Numpad `1`-`8` | choose a class in the menu |
 
@@ -57,7 +57,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 ### Classes
 
 Scout, Soldier (rocket jumping works), Demoman (grenade launcher + sticky pipebombs), HWGuy, Sniper (charged
-shots, headshots), Medic (medikit heals teammates, infects enemies), Pyro (flamethrower, burning), Engineer (sentry gun, dispenser, teleporters), Spy (disguise, backstab, sabotage).
+shots, headshots), Medic (medikit heals teammates, infects enemies), Pyro (flamethrower, burning, napalm), Engineer (sentry gun, dispenser, teleporters), Spy (disguise, backstab, sabotage).
 
 **Engineer / sentry gun:** right-click builds a sentry about 56 units in front of you for 130 metal (it takes 3 s to
 come online). Hit your own sentry with the wrench to upgrade it (100 metal per level, up to level 3 which adds
@@ -88,8 +88,14 @@ also carry concussion grenades. Hold `Q` (frag) or `E` (concussion) to **prime**
 and it explodes in your hand; die while holding one and you drop it live. A frag does up to 110 damage in 150 units
 (half to yourself, none to teammates, blocked by walls). A concussion grenade does **no damage**: it shoves everyone in
 260 units, teammates and you included, and leaves them dizzy for up to 8 s (the view sways and shots land off
-target). Throw one at your own feet while jumping to **concussion-jump** like a Scout. Lockers refill grenades. Bots
-throw cooked frags at visible enemies at mid range (they don't use concussions yet).
+target). Throw one at your own feet while jumping to **concussion-jump** like a Scout.
+
+**Napalm (Pyro, `E`, 2 carried):** cooks and throws like the others. When it goes off, enemies within 120 units are
+set alight and take 20 damage, and the grenade leaves a **150-unit patch of fire on the floor for 8 s** that every
+0.5 s ignites and burns (8 damage) any enemy standing in it and chews through enemy sentries, dispensers and
+teleporters (6 per tick). Running through it costs far less than standing in it; the fire is blocked by walls, doesn't
+light on water, and never hurts you or your team. Lockers refill grenades. Bots throw cooked frags at visible enemies
+at mid range (Pyro bots lob napalm instead; nobody uses concussions yet).
 
 **Spy:** `F` starts a 2 s disguise as the next enemy class. Once it completes, enemy sentries and bots won't target you
 and enemy players see you as one of their own (class colour, name tag, radar dot). Attacking or taking damage blows it.
@@ -110,7 +116,7 @@ metal (entrance outside their spawn building, exit at the front of their half), 
 All engineer structures share one code path (`Structure`): shooting, burning, explosions (rockets and grenades
 detonate on them), melee, spy sabotage and wrench repair behave identically for sentries, dispensers and teleporters.
 
-**Not yet implemented:** caltrops and the class-specific grenades (napalm, MIRV, nail, gas, EMP). (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
+**Not yet implemented:** caltrops and the remaining class-specific grenades (MIRV, nail, gas, EMP). (Bots don't yet go out of their way to destroy enemy dispensers, though they do shoot sentries.)
 
 ## The map
 
