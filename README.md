@@ -130,8 +130,23 @@ All engineer structures share one code path (`Structure`): shooting, burning, ex
 detonate on them), melee, spy sabotage and wrench repair behave identically for sentries, dispensers and teleporters.
 
 **Differences from the real TFC:** the classes, weapons, grenades and deployables are all here, but combat is simplified
-(no reloads, simple hitboxes, boxy models, procedural rather than recorded sound), there is one map, no networking, and bots are basic: they
+(no reloads, simple hitboxes, boxy models for players and weapons, procedural rather than recorded sound), there is one map, no networking, and bots are basic: they
 don't go out of their way to destroy enemy dispensers or teleporters, or to use caltrops, gas, EMP or concussions.
+
+## First-person weapon models
+
+You see the weapon in your hand, drawn in a separate pass over the world so it never clips into walls. There is a
+distinct blocky model for each of the 14 weapons (pump shotgun with a wooden stock, a nailgun with a yellow magazine,
+the rocket and grenade launchers, a four-barrel assault cannon, a scoped sniper rifle, a flamethrower with a hose and
+tank, a medikit with a red cross, a wrench with jaws, a knife, a tranquilizer syringe gun ...) and a gloved hand with a
+sleeve in your team colour. Cooking a grenade puts that grenade in your hand, tinted by type, flashing red as the fuse runs out.
+
+* **Motion:** the weapon bobs while you walk, lags and sways when you turn, rises into place when you switch weapons or
+  respawn, recoils with a muzzle flash when you shoot (heavier for the rocket launcher and shotgun, light for
+  the nailgun), swings for melee weapons and plays a throw for grenades.
+* The model hides while you look through the sniper scope, when you are dead or feigning death, and in menus.
+* The animation logic lives in Core (`WeaponAnimator`, unit-tested); only the drawing is in the client.
+* Development aids: `--slot 1..3`, `--fire` and `--grenade` set up screenshots of a particular weapon, mid-shot or cooking a grenade.
 
 ## Sound
 

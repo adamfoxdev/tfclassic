@@ -1,6 +1,6 @@
 namespace TFClassic.Core;
 
-static class Angles
+public static class Angles
 {
     public static float Diff(float a, float b)
     {

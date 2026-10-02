@@ -17,6 +17,8 @@ sealed class Client
     readonly WorldRenderer world;
     readonly Hud hud;
     readonly SoundPlayer sound;
+    readonly ViewModel viewModel = new();
+    float lastFrame = 1f / 60f;
 
     bool menuOpen = true;
     bool firstJoin = true;
@@ -50,6 +52,7 @@ sealed class Client
         while (!quit && !Raylib.WindowShouldClose())
         {
             float frame = MathF.Min(Raylib.GetFrameTime(), 0.1f);
+            lastFrame = frame;
             time += frame;
 
             if (Raylib.IsKeyPressed(KeyboardKey.F8)) sound.Muted = !sound.Muted;
@@ -80,7 +83,7 @@ sealed class Client
     }
 
     /// <summary>Runs the sim for a while with the human idle, then saves a frame and exits.</summary>
-    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false, bool infectEveryone = false, bool showGrenadeEffects = false)
+    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false, bool infectEveryone = false, bool showGrenadeEffects = false, int weaponSlot = -1, bool showFiring = false, bool showGrenade = false)
     {
         me.Input = new PlayerInput { SelectSlot = -1, Yaw = me.Yaw };
         for (float t = 0; t < warmupSeconds; t += Dt)
@@ -154,6 +157,28 @@ sealed class Client
             for (int i = 0; i < 200; i++) game.Tick(Dt);
             var s = game.SentryOf(me);
             if (s != null) { s.Level = 3; s.Health = s.MaxHealth * 0.6f; }
+        }
+        if (weaponSlot >= 0)
+        {
+            // Debug aid: hold a particular weapon (optionally frozen mid-shot) and show it.
+            me.Input = new PlayerInput { SelectSlot = weaponSlot, Yaw = yaw, Pitch = pitch };
+            for (int i = 0; i < 30; i++) game.Tick(Dt);
+            viewModel.Update(me, Dt);
+            viewModel.Settle();
+            if (showFiring)
+            {
+                viewModel.Fire(me.Weapon);
+                viewModel.Frozen = true;      // hold the mid-shot frame
+            }
+        }
+        if (showGrenade)
+        {
+            // Debug aid: cook a grenade for half a second and show it in hand.
+            me.Input = new PlayerInput { SelectSlot = -1, Yaw = yaw, Pitch = pitch, Grenade2 = true };
+            for (int i = 0; i < 30; i++) game.Tick(Dt);
+            viewModel.Update(me, Dt);
+            viewModel.Settle();
+            viewModel.Frozen = true;
         }
         for (int i = 0; i < 3; i++) Render();   // let the window/GL settle
         var image = Raylib.LoadImageFromScreen();
@@ -321,6 +346,9 @@ sealed class Client
         Raylib.BeginMode3D(cam);
         world.Draw(me, time);
         Raylib.EndMode3D();
+
+        viewModel.Update(me, lastFrame);
+        viewModel.Draw(me, menuOpen, time);
 
         if (menuOpen) hud.DrawClassMenu(w, h, menuTeam, menuClass, firstJoin);
         else hud.Draw(me, cam, w, h, Raylib.IsKeyDown(KeyboardKey.Tab));
