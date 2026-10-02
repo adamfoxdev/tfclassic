@@ -146,7 +146,13 @@ sleeve in your team colour. Cooking a grenade puts that grenade in your hand, ti
   the nailgun), swings for melee weapons and plays a throw for grenades.
 * The model hides while you look through the sniper scope, when you are dead or feigning death, and in menus.
 * The animation logic lives in Core (`WeaponAnimator`, unit-tested); only the drawing is in the client.
-* Development aids: `--slot 1..3`, `--fire` and `--grenade` set up screenshots of a particular weapon, mid-shot or cooking a grenade.
+
+**Other players** hold the *same* models (shared in `WeaponModels`): a sleeved arm reaches out from the right
+shoulder with the weapon in hand, scaled to fit a 72-unit-tall player. It tilts with their aim, recoils, swings (melee)
+and flashes at the muzzle as they fire, so you can tell what an enemy is carrying and when they shoot; someone cooking
+a grenade holds it up, flashing red near the end. A **disguised spy holds the disguise class's weapon** (a "Soldier"
+carries a rocket launcher), so the gun doesn't give the game away; teammates still see the real one.
+* Development aids: `--slot 1..3`, `--fire` and `--grenade` set up screenshots of a particular weapon, mid-shot or cooking a grenade; `--lineup` stands one player per weapon in rows to inspect the third-person models.
 
 ## Sound
 
@@ -181,7 +187,7 @@ src/TFClassic.Core   headless simulation – no rendering, fully unit-tested
   Game                 players, weapons, projectiles, explosions, flags, scoring, respawn
   GameMap              the 2fort_lite geometry, spawns and bot waypoints (Red half is mirrored to Blue)
   Navigation/BotBrain  waypoint A*, target selection, aiming, role assignment (attackers/defenders)
-src/TFClassic.Game   Raylib-cs client: renderer, HUD, menu, input, fixed 60 Hz timestep
+src/TFClassic.Game   Raylib-cs client (namespace TFClassic.Desktop): renderer, weapon models, HUD, menu, sound, input, fixed 60 Hz timestep
 tests/TFClassic.Tests xunit: physics, combat, CTF rules, map validity, full bot-vs-bot matches
 ```
 

@@ -3,7 +3,7 @@ using Raylib_cs;
 using TFClassic.Core;
 using Material = TFClassic.Core.Material;
 
-namespace TFClassic.Game;
+namespace TFClassic.Desktop;
 
 static class Palette
 {

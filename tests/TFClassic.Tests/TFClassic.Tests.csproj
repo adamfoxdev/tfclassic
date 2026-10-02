@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TFClassic.Core\TFClassic.Core.csproj" />
+    <ProjectReference Include="..\..\src\TFClassic.Game\TFClassic.Game.csproj" />
   </ItemGroup>
 
 </Project>

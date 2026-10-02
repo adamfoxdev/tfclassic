@@ -2,7 +2,7 @@ using System.Numerics;
 using Raylib_cs;
 using TFClassic.Core;
 
-namespace TFClassic.Game;
+namespace TFClassic.Desktop;
 
 /// <summary>Immediate-mode helpers: face-shaded boxes so the unlit world still reads as 3D.</summary>
 static class Draw3D

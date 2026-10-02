@@ -2,7 +2,7 @@ using System.Numerics;
 using Raylib_cs;
 using TFClassic.Core;
 
-namespace TFClassic.Game;
+namespace TFClassic.Desktop;
 
 /// <summary>
 /// Plays the game's synthesized sounds through raylib. Every sound is pre-rendered at several stereo pan

@@ -2,7 +2,7 @@ using System.Numerics;
 using Raylib_cs;
 using TFClassic.Core;
 
-namespace TFClassic.Game;
+namespace TFClassic.Desktop;
 
 static class Program
 {
@@ -50,7 +50,7 @@ static class Program
         int perTeam = 6, seed = Environment.TickCount, width = 1280, height = 720;
         string? screenshot = null;
         float[]? at = null;
-        bool mute = false, audioTest = false, shotFire = false, shotGrenade = false;
+        bool mute = false, audioTest = false, shotFire = false, shotGrenade = false, lineup = false;
         int shotSlot = -1;
         float volume = 0.55f;
         string? dumpSounds = null;
@@ -76,6 +76,7 @@ static class Program
                 case "--slot": shotSlot = int.Parse(args[++i]) - 1; break;
                 case "--fire": shotFire = true; break;
                 case "--grenade": shotGrenade = true; break;
+                case "--lineup": lineup = true; break;
                 case "--menu": menu = true; break;
                 case "--sentry": sentry = true; break;
                 case "--tele": tele = true; break;
@@ -86,7 +87,7 @@ static class Program
                 case "--class": cls = Enum.Parse<PlayerClassId>(args[++i], true); break;
                 case "--help":
                     Console.WriteLine("TFClassic [--bots N per team] [--seed N] [--team red|blue] [--class <name>] [--width W --height H]\n" +
-                                      "          [--mute] [--volume 0..1] [--dump-sounds dir] [--audio-test] [--slot 1..3] [--fire] [--grenade]\n          [--screenshot out.png [--warmup seconds] [--at x,y,z,yawDeg,pitchDeg]]");
+                                      "          [--mute] [--volume 0..1] [--dump-sounds dir] [--audio-test] [--slot 1..3] [--fire] [--grenade] [--lineup]\n          [--screenshot out.png [--warmup seconds] [--at x,y,z,yawDeg,pitchDeg]]");
                     return 0;
             }
         }
@@ -127,7 +128,7 @@ static class Program
 
         var client = new Client(game, human, screenshot != null && !menu, sound);
         if (screenshot != null)
-            return client.RunScreenshot(screenshot, warmup, at, sentry, tele, infect, fx, shotSlot, shotFire, shotGrenade);
+            return client.RunScreenshot(screenshot, warmup, at, sentry, tele, infect, fx, shotSlot, shotFire, shotGrenade, lineup);
 
         client.Run();
         Console.WriteLine($"audio: played {sound.PlayedCount} sounds");

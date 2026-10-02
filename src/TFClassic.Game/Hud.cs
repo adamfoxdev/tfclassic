@@ -2,7 +2,7 @@ using System.Numerics;
 using Raylib_cs;
 using TFClassic.Core;
 
-namespace TFClassic.Game;
+namespace TFClassic.Desktop;
 
 sealed class Hud
 {

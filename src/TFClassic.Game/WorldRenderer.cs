@@ -1,12 +1,15 @@
 using System.Numerics;
 using Raylib_cs;
 using TFClassic.Core;
+using static TFClassic.Desktop.WeaponModels;
 
-namespace TFClassic.Game;
+namespace TFClassic.Desktop;
 
 sealed class WorldRenderer
 {
     readonly Core.Game game;
+    readonly Dictionary<int, WeaponAnimator> animators = new();
+    float lastDrawTime;
 
     public WorldRenderer(Core.Game game) => this.game = game;
 
@@ -17,8 +20,15 @@ sealed class WorldRenderer
         foreach (var s in game.World.Solids)
             Draw3D.Box(s.Box.Min, s.Box.Max, Palette.Of(s.Material), outline: true);
 
+        float dt = Math.Clamp(time - lastDrawTime, 0f, 0.1f);
+        lastDrawTime = time;
         foreach (var p in game.Players)
-            if (p.Alive && (p != viewer)) DrawPlayer(p, viewer);
+        {
+            if (!p.Alive || p == viewer) continue;
+            if (!animators.TryGetValue(p.Id, out var anim)) animators[p.Id] = anim = new WeaponAnimator();
+            anim.Update(p, dt);
+            DrawPlayer(p, viewer);
+        }
 
         DrawSentries();
         DrawDispensers();
@@ -72,7 +82,7 @@ sealed class WorldRenderer
         Draw3D.Box(new Vector3(-13, 28, -8), new Vector3(13, 52, 8), Palette.Shade(team, blink), true);                         // torso
         Draw3D.Box(new Vector3(-8, 52, -8), new Vector3(8, 66, 8), Palette.Shade(new Color(222, 184, 150, 255), blink), true);  // head
         Draw3D.Box(new Vector3(-9, 62, -9), new Vector3(9, 68, 9), Palette.Shade(cls, blink), true);                            // class helmet band
-        Draw3D.Box(new Vector3(-16, 36, 2), new Vector3(-9, 44, 34), Palette.Shade(new Color(45, 45, 50, 255), blink), true);   // weapon
+        DrawHeldWeapon(p, viewer, Palette.Shade(team, 0.75f * blink), blink);
 
         Rlgl.PopMatrix();
 
@@ -333,6 +343,53 @@ sealed class WorldRenderer
         Draw3D.Box(new Vector3(-14, 0, -30), new Vector3(14, 12, 8), team, true);                                    // torso
         Draw3D.Box(new Vector3(-8, 0, 8), new Vector3(8, 14, 22), new Color(222, 184, 150, 255), true);              // head
         Draw3D.Box(new Vector3(-11, 0, -52), new Vector3(11, 10, -30), new Color(60, 60, 70, 255), true);            // legs
+        Rlgl.PopMatrix();
+    }
+
+    /// <summary>
+    /// A sleeved arm from the right shoulder holding the same model the owner sees in first person, scaled to a
+    /// 72-unit-tall player. It tilts with the player's aim and recoils, swings and flashes as they fire.
+    /// Called with the player's transform (feet origin, +Z forward, +X to their left) already applied.
+    /// </summary>
+    void DrawHeldWeapon(Player p, Player viewer, Color sleeve, float blink)
+    {
+        animators.TryGetValue(p.Id, out var anim);
+        anim ??= new WeaponAnimator();
+
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(-14f, 46f, 2f);                                     // right shoulder
+        Rlgl.Rotatef(-p.Pitch * (180f / MathF.PI), 1, 0, 0);                // arm follows the aim
+
+        float swingA = anim.Swing > 0 ? MathF.Sin(MathF.PI * (1f - anim.Swing)) : 0f;
+        if (anim.Swing > 0) Rlgl.Rotatef(-swingA * 65f, 1, 0, 0);          // melee: swing the whole arm
+
+        Draw3D.Box(new Vector3(-3, -6, -2), new Vector3(3, 2, 15), sleeve);                                        // sleeve
+        Draw3D.Box(new Vector3(-2.6f, -5.5f, 14), new Vector3(2.6f, -1.5f, 20), Palette.Shade(new Color(222, 184, 150, 255), blink)); // hand
+
+        Rlgl.Translatef(0, -3f, 19f - anim.Kick * 3f);                      // the grip, pushed back by recoil
+        Rlgl.Rotatef(180, 0, 1, 0);                                         // model space has the barrel along -Z
+        Rlgl.Scalef(1.8f, 1.8f, 1.8f);
+
+        if (p.Primed >= 0)
+        {
+            var kind = p.Class.GrenadeKindOf(p.Primed);
+            var body = GrenadeColor(kind);
+            if (p.PrimedTimer < 1f && (int)(p.PrimedTimer * (p.PrimedTimer < 0.4f ? 14 : 7)) % 2 == 0) body = new Color(255, 90, 60, 255);
+            Draw3D.Box(new Vector3(-1.5f, -1.2f, -1.5f), new Vector3(1.5f, 2.2f, 1.5f), Palette.Shade(body, blink));
+            Draw3D.Box(new Vector3(-.9f, 2.2f, -.9f), new Vector3(.9f, 2.9f, .9f), Palette.Shade(Dark, blink));
+        }
+        else if (Models.TryGetValue(HeldBy(p, viewer), out var model))
+        {
+            foreach (var part in model.Parts)
+                Draw3D.Box(part.Min, part.Max, Palette.Shade(part.Color, blink));
+
+            if (anim.Flash > 0 && model.Muzzle is { } muzzle)
+            {
+                float f = anim.Flash / WeaponAnimator.FlashTime;
+                Raylib.DrawSphere(muzzle + new Vector3(0, 0, -1.5f), 2.4f * f + 0.6f, new Color(255, 230, 140, (int)(230 * f)));
+                Raylib.DrawSphere(muzzle + new Vector3(0, 0, -0.6f), 1.3f * f + 0.3f, new Color(255, 255, 230, (int)(255 * f)));
+            }
+        }
         Rlgl.PopMatrix();
     }
 

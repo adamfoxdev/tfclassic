@@ -2,7 +2,7 @@ using System.Numerics;
 using Raylib_cs;
 using TFClassic.Core;
 
-namespace TFClassic.Game;
+namespace TFClassic.Desktop;
 
 /// <summary>Owns input, the fixed-timestep loop, the camera and the frame layout.</summary>
 sealed class Client
@@ -83,7 +83,7 @@ sealed class Client
     }
 
     /// <summary>Runs the sim for a while with the human idle, then saves a frame and exits.</summary>
-    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false, bool infectEveryone = false, bool showGrenadeEffects = false, int weaponSlot = -1, bool showFiring = false, bool showGrenade = false)
+    public int RunScreenshot(string path, float warmupSeconds, float[]? at, bool buildSentry = false, bool buildTeleporters = false, bool infectEveryone = false, bool showGrenadeEffects = false, int weaponSlot = -1, bool showFiring = false, bool showGrenade = false, bool lineup = false)
     {
         me.Input = new PlayerInput { SelectSlot = -1, Yaw = me.Yaw };
         for (float t = 0; t < warmupSeconds; t += Dt)
@@ -169,6 +169,38 @@ sealed class Client
             {
                 viewModel.Fire(me.Weapon);
                 viewModel.Frozen = true;      // hold the mid-shot frame
+            }
+        }
+        if (lineup)
+        {
+            // Debug aid: one player holding each weapon, in rows, seen from their right-hand side (plus one cooking a grenade).
+            var holders = new List<(PlayerClassId cls, int slot)>();
+            foreach (var id in Enum.GetValues<WeaponId>())
+            {
+                var cls = Classes.All.First(k => k.Slots.Contains(id));
+                holders.Add((cls.Id, Array.IndexOf(cls.Slots, id)));
+            }
+            var extra = game.AddPlayer("cook", Team.Blue, PlayerClassId.Pyro);
+            int n = 0;
+            foreach (var (cls, slot) in holders.Append((PlayerClassId.Pyro, 2)))
+            {
+                var q = n == holders.Count ? extra : game.AddPlayer("w" + n, n % 2 == 0 ? Team.Red : Team.Blue, cls);
+                q.PendingClass = cls;
+                q.Slot = slot;
+                q.Position = n == holders.Count ? new Vector3(0, 0, 640) : new Vector3(-220 + (n % 5) * 110, 0, 720 + (n / 5) * 150);
+                q.Velocity = Vector3.Zero;
+                q.SpawnProtect = 0;
+                q.Input = new PlayerInput { SelectSlot = slot, Yaw = -MathF.PI / 2, Pitch = 0.05f };   // facing -X: right shoulder toward the camera
+                if (n == holders.Count) { q.Primed = 0; q.PrimedTimer = 2.4f; }
+                n++;
+            }
+            for (int i = 0; i < 40; i++) game.Tick(Dt);
+            foreach (var q in game.Players) if (q.Input.SelectSlot == 2 && q.Name == "cook") { q.Primed = 0; q.PrimedTimer = 2.4f; }
+            if (at is not { Length: 5 })
+            {
+                me.Position = new Vector3(0, 0, 420);
+                me.Velocity = Vector3.Zero;
+                yaw = 0; pitch = -0.18f;
             }
         }
         if (showGrenade)
