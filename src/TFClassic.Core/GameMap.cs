@@ -9,7 +9,7 @@ public readonly record struct SpawnPoint(Vector3 Position, float Yaw);
 /// Red fortress sits at +Z, Blue at -Z; a river with one bridge runs through the middle.
 /// </summary>
 /// <summary>Visual flavour of a map; the client picks palettes and sky colours from it.</summary>
-public enum MapTheme { Grassland, Desert }
+public enum MapTheme { Grassland, Desert, Snow }
 
 public sealed partial class GameMap
 {
@@ -65,7 +65,7 @@ public sealed partial class GameMap
         Nav.Link("B_" + a, "B_" + b);
     }
 
-    public static readonly string[] Names = { "2fort_lite", "bunker_yard" };
+    public static readonly string[] Names = { "2fort_lite", "bunker_yard", "frost_trench" };
 
     /// <summary>Builds a map by name (case-insensitive, unambiguous prefixes like "bunker" or "2fort" work).</summary>
     public static GameMap Create(string name)
@@ -76,6 +76,7 @@ public sealed partial class GameMap
         return matches[0] switch
         {
             "bunker_yard" => BunkerYard(),
+            "frost_trench" => FrostTrench(),
             _ => TwoFortLite(),
         };
     }

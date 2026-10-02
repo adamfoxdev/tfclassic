@@ -10,13 +10,29 @@ static class Palette
     /// <summary>Set once at startup from the loaded map.</summary>
     public static MapTheme Theme { get; set; } = MapTheme.Grassland;
 
-    public static Color Sky => Theme == MapTheme.Desert ? new Color(222, 200, 160, 255) : new Color(135, 190, 235, 255);
+    public static Color Sky => Theme switch
+    {
+        MapTheme.Desert => new Color(222, 200, 160, 255),
+        MapTheme.Snow => new Color(190, 205, 222, 255),
+        _ => new Color(135, 190, 235, 255),
+    };
     public static readonly Color Red = new(220, 60, 50, 255);
     public static readonly Color Blue = new(60, 105, 235, 255);
 
     public static Color Team(Team t) => t == Core.Team.Red ? Red : Blue;
 
-    public static Color Of(Material m) => Theme == MapTheme.Desert ? Desert(m) : Grass(m);
+    public static Color Of(Material m) => Theme switch { MapTheme.Desert => Desert(m), MapTheme.Snow => Snow(m), _ => Grass(m) };
+
+    static Color Snow(Material m) => m switch
+    {
+        Material.Ground => new Color(228, 234, 240, 255),
+        Material.Wall => new Color(120, 132, 150, 255),
+        Material.Floor => new Color(168, 178, 192, 255),
+        Material.Crate => new Color(96, 78, 62, 255),
+        Material.Stairs => new Color(150, 160, 176, 255),
+        Material.Roof => new Color(90, 100, 118, 255),
+        _ => Grass(m),
+    };
 
     static Color Desert(Material m) => m switch
     {
