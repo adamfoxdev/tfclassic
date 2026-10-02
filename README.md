@@ -12,7 +12,7 @@ dotnet run --project src/TFClassic.Game
 dotnet run --project src/TFClassic.Game -- --bots 8 --team red --class sniper
 ```
 
-Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <name>`, `--seed N`,
+Options: `--mute`, `--volume 0..1`, `--bots N` (players per team, default 6), `--team red|blue`, `--class <name>`, `--seed N`,
 `--width W --height H`.
 
 ### Controls
@@ -31,6 +31,7 @@ Options: `--bots N` (players per team, default 6), `--team red|blue`, `--class <
 | `F` / `G` | Spy: cycle disguise as an enemy class / feign death |
 | `B` | Engineer: build a dispenser (again to demolish it) |
 | `T` | Engineer: build teleporter entrance, then exit, then demolish the pair |
+| `F8` | mute / unmute sound |
 | `M` | class menu (applies on respawn, or instantly in your own resupply room) |
 | `Esc` | quit |
 
@@ -129,8 +130,26 @@ All engineer structures share one code path (`Structure`): shooting, burning, ex
 detonate on them), melee, spy sabotage and wrench repair behave identically for sentries, dispensers and teleporters.
 
 **Differences from the real TFC:** the classes, weapons, grenades and deployables are all here, but combat is simplified
-(no reloads, simple hitboxes, boxy models, no sound), there is one map, no networking, and bots are basic: they
+(no reloads, simple hitboxes, boxy models, procedural rather than recorded sound), there is one map, no networking, and bots are basic: they
 don't go out of their way to destroy enemy dispensers or teleporters, or to use caltrops, gas, EMP or concussions.
+
+## Sound
+
+There are no audio files: every sound (50 of them) is **synthesized at startup** from filtered noise, sweeps and tones
+(`SoundSynth` in Core), so the repo stays asset-free. The game logic only *emits* events ("a shotgun fired here",
+"a rocket exploded there"); the client turns them into audio.
+
+* **Positional:** sounds fade with distance (explosions carry much further than footsteps) and are **panned left/right**
+  relative to where you are looking. Your own shots and footsteps are centred. Flag events (taken, dropped, returned,
+  captured, match won) are heard everywhere.
+* **What makes noise:** every weapon, melee hits and backstabs, explosions (plus distinct detpack, concussion, napalm,
+  EMP, gas, nail and caltrop sounds), grenade pins/throws/bounces, a detpack's ticking beep, pain and death, jumps,
+  landings and footsteps, resupply, respawn, building and upgrading, sentry fire, teleporting, dispenser use, disguise,
+  feigning, sabotage, infection and cure. A short tick confirms your own hits.
+* `F8` mutes; `--mute` starts muted and `--volume 0..1` sets the level (default 0.55, which leaves headroom for
+  several loud sounds at once). With no audio device the game just runs silent and says so.
+* `--dump-sounds <dir>` writes every sound as a WAV so you can audition or edit the recipes;
+  `--audio-test` plays a known sequence (left, right, ahead, near/far explosion, hit tick) without opening a window.
 
 ## The map
 

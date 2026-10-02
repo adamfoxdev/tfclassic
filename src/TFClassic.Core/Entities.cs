@@ -63,6 +63,7 @@ public sealed class Player
     public float FeignTimer, FeignCooldown;
     public float SlowTime;
     public int TeleportCount;
+    public float NextHurtSound, NextHitSound, StepDistance;   // sound pacing
 
     // Medic infection: who infected this player (null = healthy) and when the next tick is due.
     public Player? InfectedBy;

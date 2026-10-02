@@ -30,6 +30,27 @@ public sealed class Game
     public Team? Winner { get; private set; }
     public Random Rng { get; }
 
+    /// <summary>
+    /// When true the game records <see cref="SoundEvent"/>s for a client to play. Off by default so headless
+    /// simulations (bots, tests) don't accumulate events nobody listens to.
+    /// </summary>
+    public bool RecordSounds { get; set; }
+    readonly List<SoundEvent> sounds = new();
+
+    void Emit(SoundId id, Vector3 pos, float volume = 1f, float range = 1800f, Player? source = null)
+    {
+        if (!RecordSounds || sounds.Count >= 600) return;
+        sounds.Add(new SoundEvent(id, pos, volume, range, source?.Id ?? 0));
+    }
+
+    /// <summary>Returns the sounds recorded since the last call.</summary>
+    public List<SoundEvent> DrainSounds()
+    {
+        var result = new List<SoundEvent>(sounds);
+        sounds.Clear();
+        return result;
+    }
+
     /// <summary>How many times a bot gave up on being stuck and killed itself (diagnostic).</summary>
     public int BotStuckResets { get; internal set; }
 
@@ -93,6 +114,7 @@ public sealed class Game
         }
 
         p.Position = spawn.Position;
+        Emit(SoundId.Respawn, spawn.Position, 0.5f, 1000f, p);
         p.Velocity = Vector3.Zero;
         p.Yaw = spawn.Yaw;
         p.Pitch = 0;
@@ -189,7 +211,10 @@ public sealed class Game
         if (p.SlowTime > 0) speedScale *= 0.45f;
         if (MatchOver || p.Feigning) { p.Input.Forward = 0; p.Input.Right = 0; p.Input.Fire = false; p.Input.Jump = false; }
 
+        bool wasOnGround = p.OnGround;
+        float fallSpeed = p.Velocity.Y;
         Movement.Simulate(World, p, speedScale, dt);
+        EmitMovementSounds(p, wasOnGround, fallSpeed);
 
         if (p.Position.Y < -400) { Kill(p, null, "the void"); return; }
 
@@ -219,6 +244,22 @@ public sealed class Game
         HandleGrenades(p, dt);
     }
 
+    void EmitMovementSounds(Player p, bool wasOnGround, float prevVerticalSpeed)
+    {
+        if (!RecordSounds) return;
+        if (wasOnGround && !p.OnGround && p.Velocity.Y > 150f) Emit(SoundId.Jump, p.Position, 0.5f, 700f, p);
+        else if (!wasOnGround && p.OnGround && prevVerticalSpeed < -200f) Emit(SoundId.Land, p.Position, 0.7f, 900f, p);
+
+        if (!p.OnGround) return;
+        float speed = MathF.Sqrt(p.Velocity.X * p.Velocity.X + p.Velocity.Z * p.Velocity.Z);
+        p.StepDistance += speed * (1f / 60f);
+        if (p.StepDistance >= 95f)
+        {
+            p.StepDistance = 0;
+            if (speed > 120f) Emit(SoundId.Footstep, p.Position, MathF.Min(0.55f, speed / 500f), 550f, p);
+        }
+    }
+
     void Resupply(Player p)
     {
         bool changed = p.Health < p.Class.MaxHealth || p.Armor < p.Class.MaxArmor || p.Metal < p.Class.MaxMetal
@@ -236,6 +277,7 @@ public sealed class Game
         p.Detpacks = p.Class.Detpacks;
         for (int i = 0; i < p.Ammo.Length; i++) p.Ammo[i] = p.Class.MaxAmmo[i];
         p.ResupplyCooldown = 3f;
+        Emit(SoundId.Resupply, p.Center, 0.7f, 900f, p);
     }
 
     // ───────────────────────── weapons ─────────────────────────
@@ -309,9 +351,21 @@ public sealed class Game
         return Vector3.Normalize(dir + r * a + u * b);
     }
 
+    static readonly Dictionary<WeaponId, (SoundId Sound, float Volume, float Range)> WeaponSounds = new()
+    {
+        [WeaponId.Crowbar] = (SoundId.MeleeSwing, 0.6f, 600), [WeaponId.Medikit] = (SoundId.MeleeSwing, 0.5f, 500),
+        [WeaponId.Wrench] = (SoundId.MeleeSwing, 0.6f, 600), [WeaponId.Knife] = (SoundId.MeleeSwing, 0.4f, 400),
+        [WeaponId.Shotgun] = (SoundId.Shotgun, 1f, 2400), [WeaponId.Nailgun] = (SoundId.Nailgun, 0.8f, 1600),
+        [WeaponId.SuperNailgun] = (SoundId.SuperNailgun, 0.9f, 1700), [WeaponId.RocketLauncher] = (SoundId.RocketLaunch, 1f, 2400),
+        [WeaponId.GrenadeLauncher] = (SoundId.GrenadeLauncher, 0.9f, 2000), [WeaponId.PipebombLauncher] = (SoundId.PipeLaunch, 0.8f, 1800),
+        [WeaponId.AssaultCannon] = (SoundId.AssaultCannon, 1f, 2600), [WeaponId.AutoRifle] = (SoundId.AutoRifle, 0.8f, 2000),
+        [WeaponId.Flamethrower] = (SoundId.Flame, 0.7f, 1000), [WeaponId.Tranquilizer] = (SoundId.Tranq, 0.5f, 900),
+    };
+
     void Fire(Player p, WeaponDef w)
     {
         BreakDisguise(p);
+        if (WeaponSounds.TryGetValue(w.Id, out var ws)) Emit(ws.Sound, p.Eye, ws.Volume, ws.Range, p);
         if (w.Ammo != AmmoType.None) p.Ammo[(int)w.Ammo] -= w.AmmoPerShot;
         var eye = p.Eye;
         var fwd = p.Forward;
@@ -355,6 +409,7 @@ public sealed class Game
     {
         p.Ammo[(int)w.Ammo] -= w.AmmoPerShot;
         var eye = p.Eye;
+        Emit(SoundId.SniperShot, eye, 1f, 3600f, p);
         var dir = p.Forward;
         float dmg = 50f + 225f * (p.SniperCharge / 2f);
         var end = HitscanShot(p, p.Team, eye, dir, w.Range, dmg, 2f, w.Name, 60f);
@@ -429,6 +484,7 @@ public sealed class Game
 
         if (bestStructure != null)
         {
+            Emit(SoundId.MeleeHit, bestStructure.Hull.Center, 0.8f, 800, p);
             if (bestStructure.Team == p.Team) WrenchStructure(p, bestStructure);
             else if (w.Mode == FireMode.Backstab) SabotageStructure(p, bestStructure);
             else DamageStructure(bestStructure, p, w.Damage, w.Name);
@@ -438,11 +494,13 @@ public sealed class Game
 
         if (best.Team == p.Team)
         {
+            Emit(SoundId.Heal, best.Center, 0.6f, 600, p);
             bool cured = best.IsInfected;
             if (cured)
             {
                 best.InfectedBy = null;
                 Notice(best, "A medic cured your infection");
+                Emit(SoundId.Cure, best.Center, 0.8f, 900f, p);
                 Notice(p, $"Cured {best.Name}'s infection");
             }
             if (best.Health < best.Class.MaxHealth || cured)
@@ -459,11 +517,13 @@ public sealed class Game
             var victimFacing = new Vector3(MathF.Sin(best.Yaw), 0, MathF.Cos(best.Yaw));
             bool behind = toAttacker.LengthSquared() < 1f
                           || Vector3.Dot(victimFacing, Vector3.Normalize(toAttacker)) < -0.3f;
+            Emit(behind ? SoundId.Backstab : SoundId.MeleeHit, best.Center, 0.9f, 900, p);
             if (behind) Damage(best, p, 200f, "Knife (backstab)", fwd * 90f);
             else Damage(best, p, w.Damage, w.Name, fwd * 90f);
         }
         else
         {
+            Emit(SoundId.MeleeHit, best.Center, 0.8f, 800, p);
             Damage(best, p, w.Damage, w.Name, fwd * 90f);
             if (w.Mode == FireMode.Heal) Infect(best, p);
         }
@@ -648,6 +708,7 @@ public sealed class Game
 
         if (worldHit)
         {
+            if (pr.Velocity.LengthSquared() > 140f * 140f) Emit(SoundId.GrenadeBounce, pr.Position, 0.5f, 700f);
             pr.Position += delta * tWorld + n * 1f;
             pr.Velocity -= 2f * Vector3.Dot(pr.Velocity, n) * n;
             pr.Velocity *= 0.5f;
@@ -665,6 +726,8 @@ public sealed class Game
 
     void Explode(Vector3 pos, Player owner, float damage, float radius, string weapon)
     {
+        if (weapon == "Detpack") Emit(SoundId.DetpackBlast, pos, 1f, 5000f);
+        else Emit(SoundId.Explosion, pos, MathF.Min(1f, 0.6f + radius / 400f), 3200f);
         Effects.Add(new Effect { Kind = EffectKind.Explosion, A = pos, Life = 0.35f, MaxLife = 0.35f, Radius = radius });
 
         foreach (var q in Players.ToArray())
@@ -708,6 +771,7 @@ public sealed class Game
         victim.InfectedBy = medic;
         victim.InfectionTick = InfectionInterval;
         Notice(victim, "You are infected! Find a medic or a resupply locker");
+        Emit(SoundId.Infected, victim.Center, 0.8f, 900f, victim);
         Events.Add(new GameEvent(Time, $"{medic.Name} infected {victim.Name}", medic.Team));
     }
 
@@ -769,6 +833,7 @@ public sealed class Game
         float fuse = Detpack.Fuses[p.DetpackFuseIndex];
         Detpacks.Add(new Detpack { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw, Fuse = fuse });
         Notice(p, $"Setting detpack ({fuse:0}s fuse)...");
+        Emit(SoundId.BuildStart, spot, 0.6f, 900f, p);
     }
 
     void Disarm(Detpack pack, Player? by)
@@ -791,7 +856,10 @@ public sealed class Game
             if (d.Dead) continue;
             if (d.Building) { d.BuildTimer -= dt; continue; }
 
+            float before = d.Fuse;
             d.Fuse -= dt;
+            if (d.Fuse > 0 && d.Fuse <= 10f && MathF.Floor(before) != MathF.Floor(d.Fuse))
+                Emit(SoundId.DetpackBeep, d.Hull.Center, 0.7f, 900f);   // a beep every second once it is close
             if (d.Fuse <= 0)
             {
                 d.Dead = true;
@@ -857,6 +925,7 @@ public sealed class Game
 
     void Prime(Player p, int slot)
     {
+        Emit(SoundId.GrenadePin, p.Eye, 0.7f, 700f, p);
         p.Primed = slot;
         p.PrimedTimer = GrenadeFuse;
         p.Grenades[slot]--;
@@ -914,6 +983,7 @@ public sealed class Game
         else
         {
             var fwd = p.Forward;
+            Emit(SoundId.GrenadeThrow, p.Eye, 0.6f, 800f, p);
             pr.Position = p.Eye + fwd * 16f + new Vector3(0, -8, 0);
             pr.Velocity = fwd * 520f + new Vector3(0, 110f, 0) + p.Velocity * 0.5f;
             BreakDisguise(p);
@@ -968,6 +1038,7 @@ public sealed class Game
     /// <summary>A fireball that lights everyone close by, then burns on as a patch of flames on the floor.</summary>
     void ExplodeNapalm(Vector3 pos, Player owner, float burst)
     {
+        Emit(SoundId.NapalmWhoosh, pos, 1f, 2400f);
         // Small initial blast: ignites and hurts enemies right there (the fire patch does the lasting damage).
         Effects.Add(new Effect { Kind = EffectKind.Explosion, A = pos, Life = 0.4f, MaxLife = 0.4f, Radius = FirePatch.Radius * 0.8f });
         foreach (var q in Players)
@@ -1018,6 +1089,7 @@ public sealed class Game
     /// </summary>
     void ExplodeEmp(Vector3 pos, Player owner, float radius)
     {
+        Emit(SoundId.EmpZap, pos, 1f, 2200f);
         Effects.Add(new Effect { Kind = EffectKind.Emp, A = pos, Life = 0.5f, MaxLife = 0.5f, Radius = radius });
 
         foreach (var q in Players.ToArray())
@@ -1070,6 +1142,7 @@ public sealed class Game
 
     void SpawnCaltrops(Vector3 pos, Player owner)
     {
+        Emit(SoundId.CaltropScatter, pos, 0.7f, 900f);
         var floor = FloorBelow(pos);
         if (World.InZone(ZoneKind.Water, floor + new Vector3(0, 6, 0))) return;
         AreaEffects.Add(new AreaEffect
@@ -1081,6 +1154,7 @@ public sealed class Game
 
     void SpawnArea(AreaKind kind, Vector3 pos, Player owner, float radius, float life)
     {
+        Emit(kind == AreaKind.GasCloud ? SoundId.GasHiss : SoundId.NailSpray, pos, 0.9f, 1800f);
         Effects.Add(new Effect { Kind = EffectKind.Heal, A = pos, Life = 0.3f, MaxLife = 0.3f, Team = owner.Team });
         AreaEffects.Add(new AreaEffect { Kind = kind, Owner = owner, Team = owner.Team, Position = pos, Radius = radius, Life = life });
     }
@@ -1212,6 +1286,7 @@ public sealed class Game
     /// <summary>No damage: shoves everyone nearby (teammates and the thrower too) and leaves them dizzy.</summary>
     void ExplodeConcussion(Vector3 pos, Player owner, float radius)
     {
+        Emit(SoundId.ConcussionBlast, pos, 1f, 2500f);
         Effects.Add(new Effect { Kind = EffectKind.Concussion, A = pos, Life = 0.5f, MaxLife = 0.5f, Radius = radius });
 
         foreach (var q in Players)
@@ -1236,6 +1311,7 @@ public sealed class Game
 
     public void StartDisguise(Player p, Team team, PlayerClassId cls)
     {
+        Emit(SoundId.Disguise, p.Center, 0.5f, 500f, p);
         p.DisguiseTeam = team;
         p.DisguiseClass = cls;
         p.DisguiseTimer = 2f;
@@ -1270,6 +1346,7 @@ public sealed class Game
         if (p.CarryingFlag != null) { Notice(p, "Can't feign death while carrying the flag"); return; }
 
         BreakDisguise(p);
+        Emit(SoundId.Feign, p.Center, 0.8f, 900f, p);
         p.Feigning = true;
         p.FeignTimer = 10f;
         p.Velocity = new Vector3(0, p.Velocity.Y, 0);
@@ -1303,6 +1380,7 @@ public sealed class Game
             return;
         }
         if (s.Building || s.Sabotaged) return;
+        Emit(SoundId.Sabotage, s.Hull.Center, 0.8f, 900f, spy);
         s.SabotageTimer = 4f;
         s.Saboteur = spy;
         if (s is Sentry sentry) sentry.Target = null;
@@ -1361,6 +1439,7 @@ public sealed class Game
 
         p.Metal -= Teleporter.BuildCost;
         Teleporters.Add(new Teleporter { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw, Role = role });
+        Emit(SoundId.BuildStart, spot, 0.8f, 1400f, p);
         Notice(p, role == TeleporterRole.Entrance
             ? "Building teleporter entrance... (T again, elsewhere, for the exit)"
             : "Building teleporter exit...");
@@ -1422,6 +1501,8 @@ public sealed class Game
                 Kill(enemy, q, "Telefrag");
         }
 
+        Emit(SoundId.Teleport, entrance.Hull.Center, 0.9f, 1500f);
+        Emit(SoundId.Teleport, exit.Hull.Center, 0.9f, 1500f);
         Effects.Add(new Effect { Kind = EffectKind.Heal, A = entrance.Hull.Center + new Vector3(0, 20, 0), Life = 0.5f, MaxLife = 0.5f, Team = q.Team });
         q.Position = exit.Position + new Vector3(0, 0.5f, 0);
         q.Velocity = Vector3.Zero;
@@ -1459,6 +1540,7 @@ public sealed class Game
         p.Metal -= Sentry.BuildCost;
         Sentries.Add(new Sentry { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw });
         Notice(p, "Building sentry...");
+        Emit(SoundId.BuildStart, spot, 0.8f, 1400f, p);
     }
 
     /// <summary>Finds floor about 56 units in front of the engineer with room for a structure of the given size.</summary>
@@ -1510,6 +1592,7 @@ public sealed class Game
         p.Metal -= Dispenser.BuildCost;
         Dispensers.Add(new Dispenser { Owner = p, Team = p.Team, Position = spot, Yaw = p.Yaw + MathF.PI });   // screen faces the engineer
         Notice(p, "Building dispenser...");
+        Emit(SoundId.BuildStart, spot, 0.8f, 1400f, p);
     }
 
     void WrenchDispenser(Player p, Dispenser d)
@@ -1552,7 +1635,11 @@ public sealed class Game
                 if (d.Store <= 0) break;
                 if (!q.Alive || q.Team != d.Team) continue;
                 if (q.Hull.DistanceTo(center) > Dispenser.Reach || !World.LineOfSight(center, q.Center)) continue;
-                if (Restock(q)) d.Store = Math.Max(0, d.Store - 15);
+                if (Restock(q))
+                {
+                    d.Store = Math.Max(0, d.Store - 15);
+                    Emit(SoundId.DispenserUse, center, 0.5f, 900f);
+                }
             }
         }
         Dispensers.RemoveAll(d => d.Dead);
@@ -1594,6 +1681,7 @@ public sealed class Game
             if (s.Level == 3) s.Rockets = 20;
             p.Metal -= Sentry.UpgradeCost;
             Notice(p, $"Sentry upgraded to level {s.Level}");
+            Emit(SoundId.Upgrade, s.Hull.Center, 0.8f, 1400f, p);
             Effects.Add(new Effect { Kind = EffectKind.Heal, A = s.Hull.Center, Life = 0.5f, MaxLife = 0.5f, Team = s.Team });
         }
         else if ((s.Health < s.MaxHealth || s.Ammo < s.MaxAmmo || (s.Level == 3 && s.Rockets < 20)) && p.Metal >= 10)
@@ -1653,6 +1741,7 @@ public sealed class Game
                 s.Ammo--;
                 s.FireCooldown = s.Cooldown;
                 var shot = Spread(dir, 0.05f);
+                Emit(SoundId.SentryFire, muzzle, 0.8f, 1500f);
                 var end = HitscanShot(s.Owner, s.Team, muzzle, shot, s.Range + 100f, 8f, 1f, "Sentry Gun", 8f);
                 AddTracer(muzzle + shot * 20f, end, s.Team);
             }
@@ -1660,6 +1749,7 @@ public sealed class Game
             {
                 s.Rockets--;
                 s.RocketCooldown = 3f;
+                Emit(SoundId.RocketLaunch, muzzle, 0.9f, 2200f);
                 Projectiles.Add(new Projectile
                 {
                     Kind = ProjectileKind.Rocket, Owner = s.Owner, Team = s.Team,
@@ -1686,6 +1776,18 @@ public sealed class Game
         victim.Velocity += knock;
         if (knock.Y > 0) victim.OnGround = false;
 
+        // Pain grunt (paced so burning/pellets don't machine-gun it) and the attacker's hit-confirm tick.
+        if (victim.Health > 0 && Time >= victim.NextHurtSound)
+        {
+            victim.NextHurtSound = Time + 0.35f;
+            Emit(SoundId.Hurt, victim.Eye, 0.8f, 1200f, victim);
+        }
+        if (attacker != null && attacker != victim && Time >= attacker.NextHitSound)
+        {
+            attacker.NextHitSound = Time + 0.07f;
+            Emit(SoundId.HitMarker, attacker.Eye, 0.6f, 100f, attacker);
+        }
+
         if (victim.Health <= 0) Kill(victim, attacker, weapon);
     }
 
@@ -1693,6 +1795,7 @@ public sealed class Game
     {
         if (!victim.Alive) return;
         victim.Alive = false;
+        Emit(SoundId.Death, victim.Center, 1f, 1600f, victim);
         victim.Deaths++;
         victim.RespawnTimer = victim.IsBot ? 4f : 5f;
         victim.BurnTime = 0;
@@ -1730,6 +1833,7 @@ public sealed class Game
             ? floor + new Vector3(0, -400 * t, 0)
             : Flags[(int)flag.Team].Home;
         Events.Add(new GameEvent(Time, $"{flag.Team} flag was dropped", flag.Team.Opposite()));
+        Emit(SoundId.FlagDrop, flag.Position, 0.8f, 99999f);
     }
 
     void ReturnFlag(Flag flag)
@@ -1755,6 +1859,7 @@ public sealed class Game
                 {
                     ReturnFlag(flag);
                     Events.Add(new GameEvent(Time, $"{flag.Team} flag returned", flag.Team));
+                    Emit(SoundId.FlagReturn, flag.Home, 0.8f, 99999f);
                 }
             }
         }
@@ -1773,12 +1878,14 @@ public sealed class Game
                 enemy.DropTimer = 0;
                 p.CarryingFlag = enemy;
                 Events.Add(new GameEvent(Time, $"{p.Name} took the {enemy.Team} flag", p.Team));
+                Emit(SoundId.FlagTake, p.Position, 0.9f, 99999f);
             }
 
             if (own.Dropped && Near(p, own.Position))
             {
                 ReturnFlag(own);
                 Events.Add(new GameEvent(Time, $"{p.Name} returned the {own.Team} flag", p.Team));
+                Emit(SoundId.FlagReturn, own.Home, 0.8f, 99999f);
             }
 
             if (p.CarryingFlag != null && own.AtHome && Near(p, own.Home))
@@ -1790,12 +1897,14 @@ public sealed class Game
                 p.Frags += 10;
                 TeamScore[(int)p.Team]++;
                 Events.Add(new GameEvent(Time, $"{p.Name} captured the {captured.Team} flag!", p.Team));
+                Emit(SoundId.FlagCapture, p.Position, 1f, 99999f);
                 if (TeamScore[(int)p.Team] >= ScoreLimit)
                 {
                     MatchOver = true;
                     Winner = p.Team;
                     matchOverTimer = 8f;
                     Events.Add(new GameEvent(Time, $"{p.Team} team wins!", p.Team));
+                    Emit(SoundId.MatchWin, p.Position, 1f, 99999f);
                 }
             }
         }

@@ -16,12 +16,14 @@ sealed class Client
     readonly Player me;
     readonly WorldRenderer world;
     readonly Hud hud;
+    readonly SoundPlayer sound;
 
     bool menuOpen = true;
     bool firstJoin = true;
     PlayerClassId menuClass;
     Team menuTeam;
 
+    bool quit;
     float yaw, pitch;
     int pendingSlot = -1;
     bool pendingDisguise, pendingFeign, pendingDispenser, pendingTeleporter, pendingDetpack, pendingDetpackFuse;
@@ -29,9 +31,10 @@ sealed class Client
     double accumulator;
     float time;
 
-    public Client(Core.Game game, Player me, bool headless)
+    public Client(Core.Game game, Player me, bool headless, SoundPlayer sound)
     {
         this.game = game;
+        this.sound = sound;
         this.me = me;
         world = new WorldRenderer(game);
         hud = new Hud(game);
@@ -44,10 +47,12 @@ sealed class Client
     public void Run()
     {
         Raylib.EnableCursor();
-        while (!Raylib.WindowShouldClose())
+        while (!quit && !Raylib.WindowShouldClose())
         {
             float frame = MathF.Min(Raylib.GetFrameTime(), 0.1f);
             time += frame;
+
+            if (Raylib.IsKeyPressed(KeyboardKey.F8)) sound.Muted = !sound.Muted;
 
             if (menuOpen) UpdateMenu();
             else UpdatePlaying(frame);
@@ -63,8 +68,15 @@ sealed class Client
                 accumulator -= Dt;
             }
 
+            PlaySounds();
             Render();
         }
+    }
+
+    void PlaySounds()
+    {
+        sound.BeginFrame();
+        foreach (var e in game.DrainSounds()) sound.Play(e, me);
     }
 
     /// <summary>Runs the sim for a while with the human idle, then saves a frame and exits.</summary>
@@ -190,8 +202,7 @@ sealed class Client
         }
         else if (Raylib.IsKeyPressed(KeyboardKey.Escape))
         {
-            Raylib.CloseWindow();
-            Environment.Exit(0);
+            quit = true;
         }
     }
 
@@ -240,8 +251,7 @@ sealed class Client
         }
         if (Raylib.IsKeyPressed(KeyboardKey.Escape))
         {
-            Raylib.CloseWindow();
-            Environment.Exit(0);
+            quit = true;
         }
     }
 
@@ -315,6 +325,8 @@ sealed class Client
         if (menuOpen) hud.DrawClassMenu(w, h, menuTeam, menuClass, firstJoin);
         else hud.Draw(me, cam, w, h, Raylib.IsKeyDown(KeyboardKey.Tab));
         Raylib.DrawFPS(w - 90, h - 24);
+        string audio = !sound.Ready ? "sound: no device" : sound.Muted ? "sound: OFF (F8)" : "sound: on (F8)";
+        Raylib.DrawText(audio, w - 190, h - 44, 14, sound.Ready && !sound.Muted ? Color.LightGray : new Color(255, 170, 120, 255));
 
         Raylib.EndDrawing();
     }
